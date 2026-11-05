@@ -1,4 +1,4 @@
-"""Implementasi NaiveBayes from scratch (dummy)."""
+# Implementasi NaiveBayes from scratch (belum diimplementasikan).
 
 
 class NaiveBayes:

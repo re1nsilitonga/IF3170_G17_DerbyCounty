@@ -1,4 +1,4 @@
-"""Implementasi SVM from scratch (dummy)."""
+# Implementasi SVM from scratch (belum diimplementasikan).
 
 
 class SVM:

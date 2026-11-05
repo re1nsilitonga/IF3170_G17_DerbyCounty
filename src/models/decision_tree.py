@@ -1,35 +1,16 @@
-"""Implementasi Decision Tree Learning (CART) from scratch untuk klasifikasi biner.
-
-Ringkasan cara kerja:
-- Setiap split bersifat biner (kiri/kanan), sesuai CART.
-- Atribut numerik: dicoba semua threshold di antara dua nilai unik yang berurutan.
-- Atribut kategorikal: kategori diurutkan berdasarkan proporsi kelas positif, lalu
-  dicari titik potong terbaik pada urutan itu. Untuk kasus biner cara ini dijamin
-  menemukan partisi kategori terbaik (Breiman et al., 1984).
-- Missing value: split dicari dari baris yang tidak missing, lalu baris missing
-  dicoba dikirim ke kiri dan ke kanan, dipilih arah yang impurity-nya paling kecil.
-  Arah ini disimpan di node dan dipakai juga saat prediksi.
-
-Referensi:
-- Slide kuliah IF3170 "Decision Tree" dan "Issues in Decision Tree (DTL)".
-- L. Breiman, J. Friedman, R. Olshen, C. Stone, "Classification and Regression
-  Trees", 1984 (pengurutan kategori untuk split biner).
-- T. Chen, C. Guestrin, "XGBoost: A Scalable Tree Boosting System", KDD 2016,
-  bagian sparsity-aware split finding (ide arah default untuk missing value).
-"""
+# Implementasi Decision Tree Learning (CART) from scratch untuk klasifikasi biner.
 
 import numpy as np
 import pandas as pd
 
 
+# Satu node pohon. Daun hanya memakai value (proporsi kelas 1) dan n_samples.
 class Node:
-    """Satu node pada pohon. Node daun hanya memakai atribut value dan n_samples."""
-
     __slots__ = ('feature', 'threshold', 'is_cat', 'left_cats', 'seen_cats',
                  'missing_left', 'left', 'right', 'value', 'n_samples', 'gain')
 
+    # Buat node dengan proporsi kelas 1 dan jumlah sampelnya.
     def __init__(self, value, n_samples):
-        """Buat node baru. value adalah proporsi kelas positif pada node ini."""
         self.value = value
         self.n_samples = n_samples
         self.feature = None
@@ -42,14 +23,14 @@ class Node:
         self.right = None
         self.gain = 0.0
 
+    # True jika node tidak punya anak.
     @property
     def is_leaf(self):
-        """True jika node tidak punya anak."""
         return self.left is None
 
 
+# Impurity gini atau entropy secara vektor dari jumlah positif dan total sampel.
 def _impurity(pos, n, criterion):
-    """Hitung impurity (gini atau entropy) secara vektor dari jumlah positif dan total."""
     n = np.asarray(n, dtype=float)
     p = np.divide(pos, n, out=np.zeros_like(n), where=n > 0)
     if criterion == 'gini':
@@ -61,21 +42,12 @@ def _impurity(pos, n, criterion):
     return h
 
 
+# CART biner: split numerik dengan threshold, kategori diurutkan berdasarkan proporsi kelas 1,
+# missing value diarahkan ke cabang dengan impurity terkecil.
 class DecisionTree:
-    """Decision Tree CART untuk target biner 0/1.
-
-    Parameter
-    ---------
-    criterion : 'gini' atau 'entropy'
-    max_depth : kedalaman maksimum pohon (None berarti tanpa batas)
-    min_samples_split : jumlah sampel minimum agar node boleh di-split
-    min_samples_leaf : jumlah sampel minimum di setiap daun
-    min_impurity_decrease : penurunan impurity minimum (terbobot) agar split diterima
-    """
-
+    # min_impurity_decrease: penurunan impurity terbobot minimum agar split diterima.
     def __init__(self, criterion='gini', max_depth=None, min_samples_split=2,
                  min_samples_leaf=1, min_impurity_decrease=0.0):
-        """Simpan hyperparameter pohon."""
         self.criterion = criterion
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
@@ -84,8 +56,8 @@ class DecisionTree:
 
     # ------------------------------------------------------------ training
 
+    # Latih pohon. Kolom bertipe teks pada X dianggap kategorikal.
     def fit(self, X, y):
-        """Latih pohon. X berupa DataFrame, kolom bertipe teks dianggap kategorikal."""
         X = pd.DataFrame(X)
         self.feature_names_ = list(X.columns)
         self.is_cat_ = np.array([not pd.api.types.is_numeric_dtype(X[c]) for c in X.columns])
@@ -109,8 +81,8 @@ class DecisionTree:
         del self._X, self._y
         return self
 
+    # Ubah DataFrame jadi array float: kategori jadi kode, missing jadi NaN, kategori baru jadi -2.
     def _to_array(self, X):
-        """Ubah DataFrame menjadi array float. Kategori jadi kode, missing jadi NaN."""
         out = np.empty((len(X), len(self.feature_names_)), dtype=float)
         for j, c in enumerate(self.feature_names_):
             if self.is_cat_[j]:
@@ -122,8 +94,8 @@ class DecisionTree:
                 out[:, j] = pd.to_numeric(X[c], errors='coerce').to_numpy(dtype=float)
         return out
 
+    # Bangun pohon secara rekursif dari indeks baris idx.
     def _build(self, idx, depth):
-        """Bangun pohon secara rekursif dari kumpulan indeks baris idx."""
         y = self._y[idx]
         n, pos = len(y), int(y.sum())
         node = Node(value=pos / n, n_samples=n)
@@ -158,8 +130,8 @@ class DecisionTree:
         node.right = self._build(idx[~go_left], depth + 1)
         return node
 
+    # Cari split terbaik dari semua fitur, None jika tidak ada split valid.
     def _best_split(self, idx, y):
-        """Cari split terbaik dari semua fitur. Mengembalikan None jika tidak ada split valid."""
         n = len(y)
         parent = _impurity(y.sum(), n, self.criterion)
         best_gain, best = 1e-12, None
@@ -221,9 +193,9 @@ class DecisionTree:
                         best = (best_gain, f, thr, None, None, miss_left)
         return best
 
+    # Tentukan baris yang masuk cabang kiri. Missing dan kategori tak dikenal ikut arah default.
     @staticmethod
     def _go_left(x, thr, left_cats, seen_cats, miss_left, is_cat):
-        """Tentukan baris mana saja yang masuk ke cabang kiri pada sebuah node."""
         if is_cat:
             # Missing dan kategori yang tidak pernah terlihat di node ini ikut arah default
             unknown = np.isnan(x) | ~np.isin(x, seen_cats)
@@ -232,8 +204,8 @@ class DecisionTree:
 
     # ------------------------------------------------------------ prediksi
 
+    # Probabilitas kelas 1 (proporsi kelas 1 di daun) untuk tiap baris.
     def predict_proba(self, X):
-        """Kembalikan probabilitas kelas positif (proporsi positif di daun) untuk tiap baris."""
         Xa = self._to_array(pd.DataFrame(X))
         out = np.empty(len(Xa))
         stack = [(self.root_, np.arange(len(Xa)))]
@@ -248,26 +220,26 @@ class DecisionTree:
             stack.append((node.right, idx[~go_left]))
         return out
 
+    # Label 0/1 berdasarkan threshold.
     def predict(self, X, threshold=0.5):
-        """Kembalikan label 0/1 berdasarkan threshold probabilitas."""
         return (self.predict_proba(X) >= threshold).astype(int)
 
     # ------------------------------------------------------------ inspeksi
 
+    # Kedalaman pohon hasil training.
     def get_depth(self):
-        """Kedalaman pohon hasil training."""
         def depth(node):
             return 0 if node.is_leaf else 1 + max(depth(node.left), depth(node.right))
         return depth(self.root_)
 
+    # Jumlah daun pohon.
     def get_n_leaves(self):
-        """Jumlah daun pada pohon."""
         def leaves(node):
             return 1 if node.is_leaf else leaves(node.left) + leaves(node.right)
         return leaves(self.root_)
 
+    # Teks kondisi split sebuah node, misalnya 'days_before_arrival <= 150.5'.
     def describe_split(self, node):
-        """Teks singkat kondisi split pada sebuah node, misalnya 'days_before_arrival <= 150.5'."""
         name = self.feature_names_[node.feature]
         if node.is_cat:
             inv = {v: k for k, v in self.cat_maps_[name].items()}

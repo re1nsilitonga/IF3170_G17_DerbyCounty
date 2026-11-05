@@ -1,4 +1,4 @@
-"""Implementasi LogisticRegression from scratch (dummy)."""
+# Implementasi LogisticRegression from scratch (belum diimplementasikan).
 
 
 class LogisticRegression:
