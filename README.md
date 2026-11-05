@@ -7,10 +7,10 @@ Setiap anggota memegang satu model, lengkap dengan implementasi from scratch, pe
 | Model | Pemilik | File yang dipegang |
 | --- | --- | --- |
 | Decision Tree| Reinsen | `models/decision_tree.py`, `preprocessing/dt.py`, `preprocessing/common.py` |
-| KNN | | `models/knn.py`, `preprocessing/knn.py` |
-| Logistic Regression + cost-sensitive | | `models/logistic_regression.py`, `preprocessing/lr.py` |
-| SVM | | `models/svm.py`, `preprocessing/svm.py` |
-| Naive Bayes | | `models/naive_bayes.py`, `preprocessing/nb.py` |
+| KNN | Manu | `models/knn.py`, `preprocessing/knn.py` |
+| Logistic Regression + cost-sensitive | Juan | `models/logistic_regression.py`, `preprocessing/lr.py` |
+| SVM | Akram | `models/svm.py`, `preprocessing/svm.py` |
+| Naive Bayes | Argha | `models/naive_bayes.py`, `preprocessing/nb.py` |
 
 ## Struktur Folder
 
