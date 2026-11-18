@@ -78,6 +78,12 @@ class SVM:
         def kernel_column(index):
             return self._kernel(X, X[index:index + 1]).ravel()
 
+        # Acak kandidat berikutnya hanya jika kandidat sebelumnya tidak bisa dipakai.
+        def candidates(best, non_bound):
+            yield best
+            yield from rng.permutation(non_bound)
+            yield from rng.permutation(len(X))
+
         # Perbarui pasangan alpha sampai tidak ada perubahan atau batas iterasi tercapai.
         for iteration in range(self.max_iter):
             changed = 0
@@ -95,9 +101,7 @@ class SVM:
                     best = non_bound[np.argmax(np.abs(errors[i] - errors[non_bound]))]
                 else:
                     best = int(np.argmax(np.abs(errors[i] - errors)))
-                candidates = np.concatenate(([best], rng.permutation(non_bound),
-                                             rng.permutation(len(X))))
-                for j in candidates:
+                for j in candidates(best, non_bound):
                     if self._take_step(X, signed_y, errors, i, j, eps, kernel_column):
                         changed += 1
                         break
@@ -141,11 +145,11 @@ class SVM:
             return False
 
         # Hitung perubahan alpha dari nilai kernel kedua sampel dan selisih errornya.
-        column_i, column_j = kernel_column(i), kernel_column(j)
         if self.kernel == 'linear':
             difference = X[i] - X[j]
             eta = difference @ difference
         else:
+            column_i, column_j = kernel_column(i), kernel_column(j)
             eta = max(column_i[i] + column_j[j] - 2.0 * column_i[j], 0.0)
         slope = y[j] * (errors[i] - errors[j])
         if eta > 0:
@@ -158,7 +162,12 @@ class SVM:
         # Sesuaikan alpha_i agar sum(alpha_i * y_i) tetap nol.
         new_i = old_i + y[i] * y[j] * (old_j - new_j)
         delta_i, delta_j = new_i - old_i, new_j - old_j
-        score_change = y[i] * delta_i * column_i + y[j] * delta_j * column_j
+        if self.kernel == 'linear':
+            # Gabungkan perubahan bobot agar pasangan yang diterima cukup satu perkalian matriks.
+            weight_change = y[i] * delta_i * X[i] + y[j] * delta_j * X[j]
+            score_change = self._kernel(X, weight_change[None, :]).ravel()
+        else:
+            score_change = y[i] * delta_i * column_i + y[j] * delta_j * column_j
 
         # Tentukan bias baru dari sampel yang alphanya berada di antara 0 dan C.
         bias_i = self.intercept_ - errors[i] - score_change[i]
@@ -174,7 +183,7 @@ class SVM:
         errors += score_change + bias - self.intercept_
         self.alpha_[i], self.alpha_[j] = new_i, new_j
         if self.kernel == 'linear':
-            self.coef_ += y[i] * delta_i * X[i] + y[j] * delta_j * X[j]
+            self.coef_ += weight_change
         self.intercept_ = float(bias)
         return True
 
