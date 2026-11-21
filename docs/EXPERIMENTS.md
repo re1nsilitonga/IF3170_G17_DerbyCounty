@@ -8,3 +8,5 @@
 | svm_linear_tuning | Akram | SVM linear SMO, C 0.1, tol 0.01, max_iter 1000, dengan feature engineering; train penuh per fold | 0.7659 | 0.0053 | 0.44 | - |
 | svm_rbf | Akram | SVM rbf, C 1, gamma scale, FE; train penuh per fold, Kaggle CPU | 0.7907 | 0.0036 | 0.43 | - |
 | svm_poly | Akram | SVM poly, C 1, degree 3, gamma scale, coef0 1, FE; train penuh per fold, Kaggle CPU | 0.7943 | 0.0034 | 0.40 | - |
+| nb_categorical_two_features | Argha | Categorical NB alpha 1, kanal pemesanan dan jumlah permintaan khusus | 0.6652 | 0.0041 | 0.44 | - |
+| nb_categorical_all | Argha | Categorical NB alpha 1, 17 fitur asli dengan pengelompokan hari dan tarif | 0.7342 | 0.0084 | 0.42 | 0.73697 |
