@@ -1,4 +1,10 @@
 # Implementasi KNN from scratch untuk klasifikasi biner.
+# Referensi:
+# [1] E. Ferdian, "KNN", salindia IF3170 Inteligensi Artifisial, ITB, 2026
+#     (algoritma dasar: simpan data train, cari k tetangga terdekat, voting mayoritas).
+# [2] P. Cunningham dan S. J. Delany, "k-Nearest Neighbour Classifiers: 2nd Edition
+#     (with Python examples)", arXiv:2004.04523, 2020 (jarak Minkowski dan voting
+#     terbobot jarak 1/d).
 
 import numpy as np
 
@@ -56,23 +62,50 @@ class KNN:
             raise ValueError('k harus bilangan bulat dengan 1 <= k <= n_train.')
         return int(k)
 
+    def _check_fitted(self):
+        if not hasattr(self, 'X_') or not hasattr(self, 'y_'):
+            raise ValueError('Panggil fit sebelum mencari tetangga atau membuat prediksi.')
+
+    _EUCLID_BLOCK = 32
+
     # Jarak setiap baris Q ke seluruh data train.
     def _distances(self, Q):
         if self.p == 2:
-            # Akumulasi sqrt(sum((q-x)^2)) tanpa pengurangan dua norma besar.
-            # Per fitur agar tidak membentuk tensor query x train x fitur.
-            distances = np.zeros((len(Q), len(self.X_)), dtype=float)
-            for col in range(self.X_.shape[1]):
-                diff = Q[:, col, None] - self.X_[None, :, col]
-                np.hypot(distances, diff, out=distances)
-            return distances
+            # d(q, x) = sqrt(sum_j (q_j - x_j)^2)
+            XT = np.ascontiguousarray(self.X_.T)
+            sq = np.zeros((len(Q), len(self.X_)), dtype=float)
+            for s in range(0, len(Q), self._EUCLID_BLOCK):
+                block = sq[s:s + self._EUCLID_BLOCK]
+                q = Q[s:s + self._EUCLID_BLOCK]
+                buf = np.empty_like(block)
+                for col in range(XT.shape[0]):
+                    np.subtract(q[:, col, None], XT[col][None, :], out=buf)
+                    np.multiply(buf, buf, out=buf)
+                    block += buf
+            return np.sqrt(sq, out=sq)
         diff = np.abs(Q[:, None, :] - self.X_[None, :, :])
         return (diff ** self.p).sum(2) ** (1.0 / self.p)
 
+    # Indeks k jarak terkecil per baris
+    @staticmethod
+    def _select_k(d, k):
+        idx = np.argpartition(d, k - 1, axis=1)[:, :k]
+        sel = np.take_along_axis(d, idx, axis=1)
+        # Urutkan kandidat berdasarkan jarak, lalu indeks train terkecil untuk jarak sama.
+        order = np.lexsort((idx, sel), axis=1)
+        idx = np.take_along_axis(idx, order, axis=1)
+        # argpartition tidak menjamin indeks terkecil saat tie memotong batas ke-k;
+        # baris tersebut dipilih ulang dari seluruh kandidat dengan jarak <= jarak ke-k.
+        kth = np.take_along_axis(d, idx[:, -1:], axis=1)
+        tied = np.flatnonzero((d <= kth).sum(1) > k)
+        for r in tied:
+            cand = np.flatnonzero(d[r] <= kth[r, 0])
+            idx[r] = cand[np.argsort(d[r, cand], kind='stable')[:k]]
+        return idx
+
     # Cari k tetangga terdekat, hasilnya (jarak, indeks) terurut dari yang terdekat.
     def kneighbors(self, X, k=None):
-        if not hasattr(self, 'X_'):
-            raise ValueError('Panggil fit sebelum mencari tetangga.')
+        self._check_fitted()
         k = self._validate_k(self.k if k is None else k, len(self.X_))
         X = self._validate_X(X)
         if X.shape[1] != self.X_.shape[1]:
@@ -83,19 +116,23 @@ class KNN:
         all_d, all_i = [], []
         for s in range(0, len(X), bs):
             d = self._distances(X[s:s + bs])
-            # Stable sort mempertahankan indeks train terkecil untuk jarak sama,
-            # termasuk saat tie memotong batas tetangga ke-k.
-            idx = np.argsort(d, axis=1, kind='stable')[:, :k]
+            # Jarak sama: indeks train terkecil didahulukan, termasuk saat tie
+            # memotong batas tetangga ke-k. Copy melepaskan view hasil argpartition.
+            idx = self._select_k(d, k).copy()
             all_i.append(idx)
             all_d.append(np.take_along_axis(d, idx, axis=1))
+        # Simpan hanya k tetangga per query; matriks jarak penuh tiap batch dilepas.
         return np.vstack(all_d), np.vstack(all_i)
 
     # Probabilitas kelas 1 dari hasil kneighbors, bisa dipakai ulang untuk k yang lebih kecil.
     def proba_from_neighbors(self, dist, idx, k=None):
+        self._check_fitted()
         k = self._validate_k(self.k if k is None else k, len(self.X_))
         if k > dist.shape[1]:
             raise ValueError('Jumlah tetangga tersimpan harus minimal k.')
         dist, idx = dist[:, :k], idx[:, :k]
+        if len(dist) == 0:
+            return np.empty(0, dtype=float)
         labels = self.y_[idx]
         if self.weights == 'distance':
             w = 1.0 / (dist + 1e-9)
@@ -109,4 +146,9 @@ class KNN:
 
     # Label 0/1 berdasarkan threshold.
     def predict(self, X, threshold=0.5):
+        """Hasil integer 0/1; probabilitas tepat pada threshold memilih kelas 1."""
+        if (isinstance(threshold, (bool, np.bool_))
+                or not isinstance(threshold, (int, float, np.integer, np.floating))
+                or not np.isfinite(threshold) or not 0 <= threshold <= 1):
+            raise ValueError('threshold harus bilangan finite dalam rentang [0, 1].')
         return (self.predict_proba(X) >= threshold).astype(int)
