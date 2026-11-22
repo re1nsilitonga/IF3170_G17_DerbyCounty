@@ -37,7 +37,7 @@ class SVMTests(unittest.TestCase):
         X = np.array([[-1.], [-2.], [1.], [2.]])
         y = np.array([0, 0, 1, 1])
         with patch.object(SVM, '_resolve_device', lambda m: 'cpu' if m.device == 'cpu' else 'cuda'), \
-                patch.object(SVM, '_fit_svm_gpu', side_effect=MemoryError('VRAM')), \
+                patch.object(SVM, '_gpu_features', side_effect=MemoryError('VRAM')), \
                 threadpool_limits(limits=1):
             with self.assertWarnsRegex(RuntimeWarning, 'beralih ke CPU'):
                 model = SVM(device='auto').fit(X, y)
@@ -84,13 +84,13 @@ class SVMTests(unittest.TestCase):
             import torch
         except ImportError:
             self.skipTest('Optional PyTorch is not installed')
-        original = SVM._fit_svm_gpu
-        def on_cpu(model, X, y):
-            return original(model, X, y, torch_device='cpu')
+        original = SVM._gpu_features
+        def on_cpu(X):
+            return original(X, torch_device='cpu')
         original_resolve = SVM._resolve_device
         def resolve(model):
             return 'cuda' if model.device == 'cuda' else original_resolve(model)
-        with patch.object(SVM, '_fit_svm_gpu', on_cpu), patch.object(SVM, '_resolve_device', resolve):
+        with patch.object(SVM, '_gpu_features', staticmethod(on_cpu)), patch.object(SVM, '_resolve_device', resolve):
             self._check_gpu_solver()
 
     def test_cuda_hardware(self):
@@ -133,6 +133,20 @@ class SVMTests(unittest.TestCase):
                 self.assertTrue(model.converged_)
                 np.testing.assert_array_equal(model.predict(X), y)
                 self.assertTrue(np.isfinite(model.predict_proba(X)).all())
+
+    def test_iteration_limit_and_solver_failure_are_visible(self):
+        rng = np.random.default_rng(123)
+        X = rng.normal(size=(150, 4))
+        y = (X[:, 0] * X[:, 1] > 0).astype(int)
+        with threadpool_limits(limits=1), self.assertWarnsRegex(RuntimeWarning, 'KKT'):
+            model = SVM(kernel='rbf', max_iter=1).fit(X, y)
+        self.assertFalse(model.converged_)
+        self.assertEqual(model.n_iter_, 1)
+        self.assertTrue(np.isfinite(model.predict_proba(X)).all())
+        failure = SimpleNamespace(success=False, message='iteration limit')
+        with patch('models.svm.minimize', return_value=failure):
+            with self.assertRaisesRegex(RuntimeError, 'Solver QP SVM gagal: iteration limit'):
+                SVM().fit(X, y)
 
 
 if __name__ == '__main__':
