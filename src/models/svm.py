@@ -10,7 +10,7 @@ class SVM:
 
     # C mengatur penalti margin, tol toleransi optimasi, dan max_iter batas putaran training.
     def __init__(self, C=1.0, tol=1e-3, max_iter=1000, seed=42,
-                 kernel='linear', degree=3, gamma='scale', coef0=0.0):
+                 kernel='linear', degree=3, gamma='scale', coef0=0.0, device='cpu'):
         self.C = C
         self.tol = tol
         self.max_iter = max_iter
@@ -19,6 +19,7 @@ class SVM:
         self.degree = degree
         self.gamma = gamma
         self.coef0 = coef0
+        self.device = device
 
     # Latih SVM, lalu pelajari kalibrasi probabilitas dari holdout di dalam data train.
     def fit(self, X, y):
@@ -53,6 +54,7 @@ class SVM:
 
     # Optimasi pasangan alpha menggunakan SMO untuk kernel yang dipilih.
     def _fit_svm(self, X, y):
+        self.device_ = self._resolve_device()
         classes, encoded = np.unique(y, return_inverse=True)
         if self.gamma == 'scale':
             variance = X.var()
@@ -84,33 +86,43 @@ class SVM:
             yield from rng.permutation(non_bound)
             yield from rng.permutation(len(X))
 
-        # Perbarui pasangan alpha sampai tidak ada perubahan atau batas iterasi tercapai.
-        for iteration in range(self.max_iter):
-            changed = 0
-            for i in rng.permutation(len(X)):
-                # Cari sampel yang masih melanggar kondisi optimalitas KKT.
-                residual = signed_y[i] * errors[i]
-                violates = ((residual < -self.tol and self.alpha_[i] < self.C - eps)
-                            or (residual > self.tol and self.alpha_[i] > eps))
-                if not violates:
-                    continue
+        if self.device_ == 'cuda':
+            try:
+                self._fit_svm_gpu(X, signed_y)
+            except MemoryError:
+                if self.device != 'auto':
+                    raise
+                warnings.warn('Memori GPU tidak cukup; training beralih ke CPU.', RuntimeWarning)
+                self.device_ = 'cpu'
 
-                # Pilih pasangan dengan selisih error terbesar, lalu coba kandidat lainnya.
-                non_bound = np.flatnonzero((self.alpha_ > eps) & (self.alpha_ < self.C - eps))
-                if len(non_bound) > 1:
-                    best = non_bound[np.argmax(np.abs(errors[i] - errors[non_bound]))]
-                else:
-                    best = int(np.argmax(np.abs(errors[i] - errors)))
-                for j in candidates(best, non_bound):
-                    if self._take_step(X, signed_y, errors, i, j, eps, kernel_column):
-                        changed += 1
-                        break
+        if self.device_ == 'cpu':
+            # Perbarui pasangan alpha sampai tidak ada perubahan atau batas iterasi tercapai.
+            for iteration in range(self.max_iter):
+                changed = 0
+                for i in rng.permutation(len(X)):
+                    # Cari sampel yang masih melanggar kondisi optimalitas KKT.
+                    residual = signed_y[i] * errors[i]
+                    violates = ((residual < -self.tol and self.alpha_[i] < self.C - eps)
+                                or (residual > self.tol and self.alpha_[i] > eps))
+                    if not violates:
+                        continue
 
-            self.n_iter_ = iteration + 1
-            if self.kernel == 'linear':
-                errors = X @ self.coef_ + self.intercept_ - signed_y
-            if changed == 0:
-                break
+                    # Pilih pasangan dengan selisih error terbesar, lalu coba kandidat lainnya.
+                    non_bound = np.flatnonzero((self.alpha_ > eps) & (self.alpha_ < self.C - eps))
+                    if len(non_bound) > 1:
+                        best = non_bound[np.argmax(np.abs(errors[i] - errors[non_bound]))]
+                    else:
+                        best = int(np.argmax(np.abs(errors[i] - errors)))
+                    for j in candidates(best, non_bound):
+                        if self._take_step(X, signed_y, errors, i, j, eps, kernel_column):
+                            changed += 1
+                            break
+
+                self.n_iter_ = iteration + 1
+                if self.kernel == 'linear':
+                    errors = X @ self.coef_ + self.intercept_ - signed_y
+                if changed == 0:
+                    break
 
         # Simpan support vector, yaitu sampel dengan alpha positif.
         self.support_ = np.flatnonzero(self.alpha_ > eps)
@@ -128,6 +140,98 @@ class SVM:
             warnings.warn('SVM berhenti sebelum seluruh kondisi KKT memenuhi tol. '
                           'Periksa scaling atau naikkan max_iter.', RuntimeWarning, stacklevel=2)
         return self
+
+    # PyTorch opsional: mode CPU dan prediksi model tersimpan tidak mengimpornya.
+    def _resolve_device(self):
+        device = getattr(self, 'device', 'cpu')
+        if device not in ('cpu', 'cuda', 'auto'):
+            raise ValueError("device harus 'cpu', 'cuda', atau 'auto'.")
+        if device == 'cpu':
+            return 'cpu'
+        try:
+            import torch
+        except ImportError as error:
+            if device == 'auto':
+                return 'cpu'
+            raise RuntimeError('device=cuda memerlukan PyTorch dengan dukungan CUDA.') from error
+        if torch.cuda.is_available():
+            return 'cuda'
+        if device == 'auto':
+            return 'cpu'
+        raise RuntimeError('CUDA tidak tersedia. Aktifkan GPU dan gunakan PyTorch CUDA, atau device=cpu.')
+
+    # SMO pada GPU: pilih pelanggar KKT terbesar dan pasangan dengan kenaikan dual tertinggi.
+    def _fit_svm_gpu(self, X, y, torch_device='cuda'):
+        import torch
+
+        n = len(X)
+        if torch_device == 'cuda':
+            free, _ = torch.cuda.mem_get_info()
+            free += torch.cuda.memory_reserved() - torch.cuda.memory_allocated()
+            required = 8 * (n * n + X.size + 4 * 256 * n) + 64 * 1024 ** 2
+            if required > free:
+                raise MemoryError(f'SVM GPU membutuhkan sekitar {required / 1024**3:.2f} GiB VRAM; '
+                                  f'tersedia {free / 1024**3:.2f} GiB. Gunakan device=cpu atau GPU lebih besar.')
+        try:
+            with torch.inference_mode():
+                features = torch.as_tensor(X, dtype=torch.float64, device=torch_device)
+                labels = torch.as_tensor(y, dtype=torch.float64, device=torch_device)
+                gram = torch.empty((n, n), dtype=torch.float64, device=torch_device)
+                for start in range(0, n, 256):
+                    gram[start:start + 256] = self._kernel(features[start:start + 256], features, xp=torch)
+                diagonal = gram.diagonal()
+                alpha = torch.zeros(n, dtype=torch.float64, device=torch_device)
+                errors = -labels.clone()
+                bias = torch.zeros((), dtype=torch.float64, device=torch_device)
+                blocked = torch.zeros(n, dtype=torch.bool, device=torch_device)
+                eps = 1e-8 * min(1.0, self.C)
+                for update in range(self.max_iter * n):
+                    residual = labels * errors
+                    violation = torch.maximum(
+                        torch.where(alpha < self.C - eps, -residual, 0.),
+                        torch.where(alpha > eps, residual, 0.))
+                    violation[blocked] = -torch.inf
+                    i = int(violation.argmax().item())
+                    if violation[i].item() <= self.tol:
+                        break
+                    old_i = alpha[i].clone()
+                    unlike = labels != labels[i]
+                    lower = torch.where(unlike, alpha - old_i, alpha + old_i - self.C).clamp(min=0.)
+                    upper = torch.where(unlike, self.C + alpha - old_i, alpha + old_i).clamp(max=self.C)
+                    eta = (diagonal[i] + diagonal - 2. * gram[i]).clamp(min=0.)
+                    slope = labels * (errors[i] - errors)
+                    proposed = torch.where(eta > 0., alpha + slope / eta.clamp(min=1e-300),
+                                           torch.where(slope > 0., upper, lower))
+                    proposed = torch.maximum(lower, torch.minimum(upper, proposed))
+                    change = proposed - alpha
+                    gain = slope * change - 0.5 * eta * change.square()
+                    gain[(upper - lower <= eps) | (change.abs() <= eps)] = -torch.inf
+                    gain[i] = -torch.inf
+                    j = int(gain.argmax().item())
+                    if gain[j].item() <= 0.:
+                        blocked[i] = True
+                        continue
+                    new_j = proposed[j].clone()
+                    delta_j = change[j]
+                    delta_i = -labels[i] * labels[j] * delta_j
+                    new_i = old_i + delta_i
+                    score_change = labels[i] * delta_i * gram[i] + labels[j] * delta_j * gram[j]
+                    bias_i = bias - errors[i] - score_change[i]
+                    bias_j = bias - errors[j] - score_change[j]
+                    new_bias = torch.where((new_i > eps) & (new_i < self.C - eps), bias_i,
+                                           torch.where((new_j > eps) & (new_j < self.C - eps),
+                                                       bias_j, (bias_i + bias_j) / 2.))
+                    errors += score_change + new_bias - bias
+                    alpha[i], alpha[j] = new_i, new_j
+                    bias = new_bias
+                    blocked.fill_(False)
+                self.alpha_ = alpha.cpu().numpy().copy()
+                self.intercept_ = float(bias.item())
+                self.n_iter_ = (update // n) + 1
+                if self.kernel == 'linear':
+                    self.coef_ = (self.alpha_ * y) @ X
+        except torch.cuda.OutOfMemoryError as error:
+            raise MemoryError('VRAM tidak cukup untuk matriks kernel SVM; gunakan GPU lebih besar atau CPU.') from error
 
     # Optimasi dua alpha sekaligus mempertahankan sum(alpha_i * y_i) = 0.
     def _take_step(self, X, y, errors, i, j, eps, kernel_column):
@@ -188,17 +292,17 @@ class SVM:
         return True
 
     # Hitung kemiripan seluruh pasangan baris pada X dan Y.
-    def _kernel(self, X, Y):
+    def _kernel(self, X, Y, xp=np):
         with np.errstate(over='ignore', invalid='ignore'):
             product = X @ Y.T
             if self.kernel == 'poly':
                 result = (self.gamma_ * product + self.coef0) ** self.degree
             elif self.kernel == 'rbf':
                 distance = (X ** 2).sum(axis=1)[:, None] + (Y ** 2).sum(axis=1) - 2.0 * product
-                result = np.exp(-self.gamma_ * np.maximum(distance, 0.0))
+                result = xp.exp(-self.gamma_ * distance.clip(0.0, None))
             else:
                 result = product
-        if not np.isfinite(result).all():
+        if not xp.isfinite(result).all():
             raise ValueError('Perhitungan kernel tidak finite, periksa scaling dan parameter kernel.')
         return result
 
@@ -225,7 +329,7 @@ class SVM:
 
         calibration_model = SVM(C=self.C, tol=self.tol, max_iter=self.max_iter,
                                 seed=self.seed, kernel=self.kernel, degree=self.degree,
-                                gamma=self.gamma_, coef0=self.coef0)
+                                gamma=self.gamma_, coef0=self.coef0, device=self.device_)
         calibration_model._fit_svm(X[training], y[training])
         scores = calibration_model.decision_function(X[holdout])
         self._fit_sigmoid(scores, positive[holdout])
