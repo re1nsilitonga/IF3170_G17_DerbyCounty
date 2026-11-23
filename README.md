@@ -61,3 +61,18 @@ jupyter nbconvert --to notebook --execute --inplace src/main.ipynb
 ```
 
 Notebook bisa dijalankan dari folder mana pun karena root repo dicari otomatis.
+
+## Notebook Naive Bayes
+
+Jalankan **Run All** dari root repo setelah menjalankan setup di atas. Keempat notebook dapat dijalankan sendiri dengan `data/train.csv`, `data/test.csv`, dan `data/sample_submission.csv`. Jika data berada di folder lain, atur `DERBY_DATA_DIR` sebelum membuka kernel.
+
+| Urutan | Notebook | Macro F1 OOF |
+| --- | --- | ---: |
+| 1 | [Baseline](src/experiments/nb/nb_baseline.ipynb) | 0,73422 |
+| 2 | [Fine-tuning](src/experiments/nb/nb_baseline_finetune.ipynb) | 0,73984 |
+| 3 | [Smoothing per fitur](src/experiments/nb/nb_baseline_finetune_2.ipynb) | 0,73977 |
+| 4 | [Naive Bayes kontekstual](src/experiments/nb/nb_baseline_finetune_3.ipynb) | 0,80196 |
+
+CSV dibuat di `output/template_nb/submissions/`. Setel `DERBY_OUTPUT_DIR` untuk memilih folder output lain. Baseline mereproduksi `submission_nb_categorical_all.csv` dengan skor Kaggle public **0,73697**. Tiga notebook berikutnya merupakan eksperimen lokal.
+
+Smoothing per fitur mengubah alpha `special_requests` dari 2 ke 10 dengan preprocessing, bobot, dan threshold yang sama. Skor OOF turun 0,00007 dan tiga dari lima fold membaik tipis. Versi kontekstual menghasilkan Macro F1 **0,79943** pada validasi bertingkat. Threshold 0,43 dipakai untuk melaporkan skor pada protokol tim, sedangkan threshold 0,45 dipakai untuk ekspor CSV.
