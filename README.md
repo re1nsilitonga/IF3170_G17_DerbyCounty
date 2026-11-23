@@ -50,20 +50,6 @@ Lima notebook yang menunjukkan perkembangan Decision Tree dari baseline sampai p
 | `dtl_entropy_mingain` | criterion entropy (information gain) | - |
 | `dtl_gain_ratio` | criterion gain ratio (C4.5) | 0.84679 |
 
-## Aturan Kerja
-
-1. **Eksperimen hanya di model sendiri.** Notebook disimpan di `src/experiments/<model>/` dengan nama `<model>_<deskripsi>.ipynb`. Satu notebook untuk satu eksperimen.
-2. **Preprocessing selalu di-fit pada data train saja**, lalu diterapkan ke validasi atau test. Train dan test tidak boleh digabung.
-3. **Validasi seragam** agar skor bisa dibandingkan: 5-fold cross validation (OOF) dengan Macro F1, dan perubahan dicek di beberapa seed fold sebelum dipercaya.
-4. **Submit Kaggle** hanya untuk model single from scratch, dengan keputusan dari skor lokal (OOF), bukan skor public.
-5. **Reproducible**: pasang seed dan jangan memakai sumber acak tanpa seed. Notebook yang dijalankan ulang harus menghasilkan submission yang sama persis (md5 dicetak di akhir notebook).
-
-## Git
-
-- Satu branch per pekerjaan dari `main`, misalnya `feat/svm`, `feat/naive-bayes`, `exp/dt-pruning`.
-- Pakai semantic commit: `feat(svm): ...`, `fix(knn): ...`, `docs: ...`, `refactor: ...`.
-- Merge ke `main` lewat pull request.
-
 ## Setup
 
 ```bash
