@@ -1,10 +1,11 @@
 # Preprocessor untuk SVM dengan imputasi, indikator missing, one-hot, dan standardisasi.
 
-from .knn import KNNPreprocessor
+import pandas as pd
+
+from .common import BasePreprocessor
 
 
-# Gunakan encoding dan transformasi yang sudah tersedia di KNNPreprocessor.
-class SVMPreprocessor(KNNPreprocessor):
+class SVMPreprocessor(BasePreprocessor):
     # Pelajari statistik dari train untuk transform data validasi dan test.
     def _fit_extra(self, df):
         # Pelajari nilai imputasi, dengan fallback untuk kolom yang seluruhnya kosong.
@@ -19,3 +20,19 @@ class SVMPreprocessor(KNNPreprocessor):
         # Simpan statistik scaling, std nol atau tidak tersedia diganti satu.
         self.means_ = encoded.mean()
         self.stds_ = encoded.std().fillna(1.0).replace(0, 1.0)
+
+    # Pertahankan susunan fitur serta statistik yang dipelajari dari train.
+    def _transform_extra(self, df):
+        encoded = self._encode(df).reindex(columns=self.columns_, fill_value=0.0)
+        return (encoded - self.means_) / self.stds_
+
+    def _encode(self, df):
+        out = pd.DataFrame(index=df.index)
+        for c in self.missing_cols_:
+            out[f'{c}_missing'] = df[c].isna().astype(float)
+        out[self.num_cols_] = df[self.num_cols_].fillna(self.medians_)
+        for c in self.cat_cols_:
+            filled = df[c].fillna(self.modes_[c])
+            for cat in dict.fromkeys(self.keep_cats_[c] + ['Other']):
+                out[f'{c}_{cat}'] = (filled == cat).astype(float)
+        return out.astype(float)

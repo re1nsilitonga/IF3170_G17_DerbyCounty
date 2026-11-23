@@ -36,8 +36,9 @@ class SVM:
             raise ValueError('tol harus positif dan finite.')
         if not isinstance(self.max_iter, (int, np.integer)) or self.max_iter < 1:
             raise ValueError('max_iter harus berupa bilangan bulat positif.')
-        if self.kernel not in ('linear', 'poly', 'rbf'):
-            raise ValueError("kernel harus 'linear', 'poly', atau 'rbf'.")
+        # Alias lama dipertahankan agar pemanggil dan model tersimpan tetap dapat digunakan.
+        if self.kernel not in ('linear', 'poly', 'gaussian', 'rbf'):
+            raise ValueError("kernel harus 'linear', 'poly', atau 'gaussian'.")
         if not isinstance(self.degree, (int, np.integer)) or self.degree < 1:
             raise ValueError('degree harus berupa bilangan bulat positif.')
         if not np.isfinite(self.coef0) or self.coef0 < 0:
@@ -173,7 +174,7 @@ class SVM:
             product = X @ Y.T
             if self.kernel == 'poly':
                 result = (self.gamma_ * product + self.coef0) ** self.degree
-            elif self.kernel == 'rbf':
+            elif self.kernel in ('gaussian', 'rbf'):
                 distance = (X ** 2).sum(axis=1)[:, None] + (Y ** 2).sum(axis=1) - 2.0 * product
                 result = xp.exp(-self.gamma_ * distance.clip(0.0, None))
             else:
@@ -276,3 +277,121 @@ class SVM:
             return self.classes_[(probability >= threshold).astype(int)]
         scores = self.decision_function(X)
         return self.classes_[(scores >= 0).astype(int)]
+
+
+# Visualisasi dan ekspor hasil SVM; library plotting dimuat saat diperlukan.
+def show_plot(fig, path):
+    """Simpan PNG dan tampilkan grafik interaktif dengan fallback gambar di notebook."""
+    import base64
+    import json
+    from pathlib import Path
+    from IPython.display import display
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.update_layout(template='plotly_white', font=dict(family='Arial', size=13, color='#243447'),
+                      margin=dict(l=70, r=35, t=100, b=110),
+                      legend=dict(orientation='h', y=-0.22, x=0.5, xanchor='center'))
+    png = fig.to_image(format='png', scale=1.5)
+    path.write_bytes(png)
+    display({'application/vnd.plotly.v1+json': json.loads(fig.to_json()),
+             'image/png': base64.b64encode(png).decode('ascii')}, raw=True)
+
+
+def boundary_plot(X, y, models, names):
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    low, high = X.min(axis=0) - 0.5, X.max(axis=0) + 0.5
+    x, v = np.linspace(low[0], high[0], 160), np.linspace(low[1], high[1], 160)
+    xx, yy = np.meshgrid(x, v)
+    grid = np.column_stack((xx.ravel(), yy.ravel()))
+    fig = make_subplots(rows=1, cols=3, shared_xaxes=True, shared_yaxes=True,
+                        subplot_titles=[f'{names[k]} · {len(m.support_)} support vector'
+                                        for k, m in models.items()], horizontal_spacing=0.05)
+    for col, model in enumerate(models.values(), 1):
+        score = model.decision_function(grid).reshape(xx.shape)
+        assert score.min() < -1 and score.max() > 1
+        fig.add_trace(go.Heatmap(x=x, y=v, z=(score >= 0).astype(int),
+                                colorscale=[[0, '#eaf3fa'], [0.49, '#eaf3fa'],
+                                            [0.5, '#fcf0e5'], [1, '#fcf0e5']],
+                                showscale=False, hoverinfo='skip'), row=1, col=col)
+        for start, end, step, name, dash, width in [(-1, 1, 2, 'Margin f=±1', 'dash', 1.4),
+                                                    (0, 0, 1, 'Batas f=0', 'solid', 2.6)]:
+            fig.add_trace(go.Contour(x=x, y=v, z=score, autocontour=False,
+                                     contours=dict(start=start, end=end, size=step,
+                                                   coloring='none', showlabels=True),
+                                     line=dict(color='#34465a', dash=dash, width=width),
+                                     showscale=False, name=name, legendgroup=name,
+                                     showlegend=col == 1, hovertemplate='f=%{z:.3f}<extra></extra>'),
+                          row=1, col=col)
+        for label, color, symbol, name in [(0, '#246c9c', 'circle', 'Tidak batal'),
+                                            (1, '#bf671f', 'triangle-up', 'Batal')]:
+            mask = y == label
+            fig.add_trace(go.Scatter(x=X[mask, 0], y=X[mask, 1], mode='markers',
+                                     marker=dict(color=color, symbol=symbol, size=6, opacity=0.65),
+                                     name=name, legendgroup=name, showlegend=col == 1,
+                                     hovertemplate='Jeda: %{x:.2f}<br>Tarif: %{y:.2f}<extra>%{fullData.name}</extra>'),
+                          row=1, col=col)
+        fig.add_trace(go.Scatter(x=model.support_vectors_[:, 0], y=model.support_vectors_[:, 1],
+                                 mode='markers', marker=dict(symbol='circle-open', size=10,
+                                                            color='#243447', line=dict(width=1)),
+                                 customdata=model.alpha_[model.support_], name='Support vector',
+                                 legendgroup='sv', showlegend=col == 1,
+                                 hovertemplate='Jeda: %{x:.2f}<br>Tarif: %{y:.2f}<br>Alpha: %{customdata:.4f}<extra>Support vector</extra>'),
+                      row=1, col=col)
+    fig.update_xaxes(title_text='Jeda kedatangan (z-score)', range=[low[0], high[0]])
+    fig.update_yaxes(range=[low[1], high[1]])
+    fig.update_yaxes(title_text='Tarif kamar (z-score)', row=1, col=1)
+    fig.update_layout(title=f'Batas dan margin SVM · {len(X)} baris train', width=1450, height=620)
+    return fig
+
+
+def pso_plot(history, comparison, dev_size, holdout_size):
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    fig = make_subplots(rows=1, cols=2, subplot_titles=[
+        f'Fitness pencarian · {dev_size} baris', 'Baseline dan pemenang PSO'], horizontal_spacing=0.12)
+    fig.add_trace(go.Scatter(x=list(range(1, len(history) + 1)), y=history,
+                             mode='lines+markers', name='Fitness terbaik', line=dict(color='#246c9c')),
+                  row=1, col=1)
+    fig.add_hline(y=comparison.iloc[0]['oof_macro_f1'], line_dash='dash',
+                  line_color='#7c8795', annotation_text='Baseline', row=1, col=1)
+    for field, name, color in [('oof_macro_f1', 'OOF seleksi', '#246c9c'),
+                                ('holdout_macro_f1', f'Holdout {holdout_size} baris', '#bf671f')]:
+        fig.add_trace(go.Bar(x=comparison.index, y=comparison[field], name=name,
+                             marker_color=color, text=comparison[field], texttemplate='%{text:.4f}',
+                             textposition='outside', hovertemplate='%{x}<br>Macro F1: %{y:.4f}<extra>%{fullData.name}</extra>'),
+                      row=1, col=2)
+    fig.update_xaxes(title_text='Generasi', dtick=1, row=1, col=1)
+    fig.update_yaxes(title_text='Macro F1 OOF terbaik', row=1, col=1)
+    fig.update_yaxes(title_text='Macro F1', range=[0, 1], row=1, col=2)
+    fig.update_layout(title='Optimasi PSO · skor seleksi dan holdout terpisah',
+                      barmode='group', width=1150, height=520)
+    return fig
+
+
+def kernel_plot(results, details, names, rows):
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    fig = make_subplots(rows=1, cols=2, subplot_titles=[f'Macro F1 OOF · {rows:,} baris',
+                                                      'Kestabilan pada lima fold'], horizontal_spacing=0.12)
+    for impl, label, color in [('from_scratch', 'From scratch', '#246c9c'),
+                                ('sklearn', 'scikit-learn', '#bf671f')]:
+        part = results[results.implementation == impl].set_index('kernel').loc[list(names)]
+        fig.add_trace(go.Bar(x=list(names.values()), y=part.oof_macro_f1, name=label,
+                             marker_color=color, text=part.oof_macro_f1,
+                             texttemplate='%{text:.4f}', textposition='outside'), row=1, col=1)
+    for kernel, color, symbol in [('linear', '#246c9c', 'circle'), ('poly', '#7955a3', 'square'),
+                                   ('gaussian', '#27856a', 'triangle-up')]:
+        part = details[(details.kernel == kernel) & (details.implementation == 'from_scratch')]
+        fig.add_trace(go.Scatter(x=part.fold, y=part.macro_f1, name=names[kernel],
+                                 mode='lines+markers', line=dict(color=color), marker=dict(symbol=symbol)),
+                      row=1, col=2)
+    fig.update_yaxes(title_text='Macro F1')
+    fig.update_yaxes(range=[0, 1], row=1, col=1)
+    fig.update_xaxes(title_text='Fold', dtick=1, row=1, col=2)
+    fig.update_layout(title='Perbandingan ketiga kernel SVM', barmode='group', width=1200, height=520)
+    return fig
