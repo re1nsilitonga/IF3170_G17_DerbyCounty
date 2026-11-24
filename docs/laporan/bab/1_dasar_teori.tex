@@ -70,7 +70,7 @@ Bentuk dual-nya hanya bergantung pada hasil kali dalam antardata, sehingga dapat
 \begin{equation}
   \min_\alpha\ \frac{1}{2}\sum_{i,j}\alpha_i\alpha_j y_i y_j K(x_i,x_j) - \sum_i\alpha_i \quad \text{s.t.}\quad 0\le\alpha_i\le C,\ \sum_i\alpha_i y_i = 0.
 \end{equation}
-Kernel yang diimplementasikan adalah linear $K(x,z)=x^\top z$, polynomial $K(x,z)=(\gamma x^\top z + r)^d$, dan Gaussian $K(x,z)=\exp(-\gamma\lVert x-z\rVert^2)$. Untuk $n$ besar, masalah dual diselesaikan dengan dekomposisi working set \cite{ref:platt_smo,ref:fan}. Probabilitas diperoleh dengan Platt scaling \cite{ref:platt_prob}.
+Kernel yang diimplementasikan adalah linear $K(x,z)=x^\top z$, polynomial $K(x,z)=(\gamma x^\top z + r)^d$, dan Gaussian $K(x,z)=\exp(-\gamma\lVert x-z\rVert^2)$. Untuk $n$ besar, masalah dual dapat diselesaikan dengan dekomposisi working set. SMO dan pemilihan working set berbasis informasi orde dua merupakan contoh pendekatan dekomposisi \cite{ref:platt_smo,ref:fan}. Implementasi saat ini memakai blok hingga 64 variabel dan solver SLSQP, sebagaimana dijelaskan pada bab implementasi. Probabilitas diperoleh dengan Platt scaling \cite{ref:platt_prob}.
 
 \section{Naive Bayes}
 \input{bab/nb/teori}

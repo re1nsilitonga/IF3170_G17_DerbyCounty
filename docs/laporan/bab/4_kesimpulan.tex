@@ -8,12 +8,13 @@
   \item \input{bab/nb/kesimpulan}
   \item Pada dataset ini, representasi fitur dan pemahaman cara data dibuat lebih menentukan daripada pilihan algoritma. Analisis noise pada lead time menghasilkan vote booking kembar, yang memberi kenaikan terbesar pada model final.
   \item Pemilihan threshold dari prediksi OOF efektif menangani ketidakseimbangan kelas 2:1 tanpa resampling. Jika biaya FP dua kali FN, threshold optimal naik ke sekitar 0,67 sampai 0,74 dan biaya turun 14\%.
+  \item SVM final dengan preprocessing template, kernel Gaussian $C=0{,}3$, $\gamma=1$, dan threshold 0,25 mencapai Macro F1 OOF 0,83243 serta public Kaggle 0,85189. Selisih OOF terhadap SVC terkalibrasi hanya 0,000042. Visualisasi tiga kernel telah memuat bidang pemisah, margin, dan support vector. PSO meningkatkan fitness development tetapi menurunkan holdout, sehingga tidak dipakai mengganti submission final.
   \item Setiap perubahan konfigurasi perlu dicek pada beberapa seed fold. Beberapa kenaikan yang terlihat pada satu pembagian fold ternyata tidak konsisten pada seed lain.
 \end{enumerate}
 
 \section{Saran}
 \begin{enumerate}
-  \item Menerapkan seleksi dan pembobotan fitur yang terbukti membantu KNN pada SVM, karena SVM masih memakai seluruh kolom tanpa seleksi.
+  \item Menguji ablation preprocessing SVM final, membandingkan kandidat pada fold yang sama, dan memakai nested CV atau holdout independen untuk seleksi model serta threshold. PSO perlu diuji pada sampel lebih besar dan beberapa seed karena peningkatan fitness development belum meningkatkan holdout.
   \item Memakai ide booking kembar pada model lain, misalnya sebagai fitur tambahan untuk Decision Tree atau Logistic Regression.
   \item Memeriksa stabilitas bin kontekstual pada pembagian data lain, terutama pada kanal dengan sedikit sampel.
   \item Mempercepat KNN from scratch untuk data lebih besar dengan struktur indeks (misalnya KD-tree) atau perhitungan jarak di GPU.

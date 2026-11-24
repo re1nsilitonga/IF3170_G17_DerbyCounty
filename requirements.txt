@@ -4,5 +4,3 @@ pandas
 scikit-learn
 matplotlib
 imageio-ffmpeg
-plotly>=6.1.1
-kaleido>=1.0

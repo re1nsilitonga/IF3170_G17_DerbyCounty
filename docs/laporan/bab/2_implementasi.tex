@@ -34,7 +34,7 @@ Temuan utama dari eksplorasi data (bagian Data Understanding pada \texttt{src/ma
   \item \textbf{Missing value} pada delapan kolom, antara 3\% dan 11\% (Tabel~\ref{tab:missing}), dengan proporsi hampir sama di train dan test. Rasio batal baris kosong dan terisi hanya berbeda di bawah 2 poin persen, kecuali \texttt{special\_requests} (40,8\% jika kosong, 32,0\% jika terisi).
   \item \textbf{Duplikat dan nilai janggal}: 64 baris duplikat persis (fitur dan target), 106 pemesanan tanpa tamu dewasa, 64 pemesanan dengan total malam 0, 3 pemesanan dengan 9 atau 10 anak, dan 146 pemesanan berharga 0 di luar kanal Complimentary.
   \item \textbf{Skala fitur} sangat berbeda: \texttt{nightly\_rate\_idr} berada pada 0 sampai Rp9.165.000, sedangkan fitur biner hanya 0 sampai 1. Lead time sangat menceng ke kanan (median 58 hari, maksimum 448 hari).
-  \item \textbf{Sinyal terkuat}: \texttt{days\_before\_arrival} (korelasi 0,44 dengan target, rasio batal naik dari 8,8\% pada lead time 0 sampai 5 hari menjadi 73,8\% di atas 192 hari), \texttt{special\_requests} ($-0{,}26$; 43,2\% batal tanpa permintaan khusus dan hampir tidak ada pembatalan pada 3 permintaan atau lebih), dan kanal pemesanan (Complimentary 0\%, Corporate 11,5\%, Online Travel Agent 36,4\%).
+  \item \textbf{Sinyal terkuat}: \texttt{days\_before\_arrival} (korelasi 0,44 dengan target, rasio batal naik dari 8,8\% pada lead time 0 sampai 5 hari menjadi 73,8\% di atas 192 hari), \texttt{special\_requests} (korelasi $-0{,}26$, dengan 43,2\% batal tanpa permintaan khusus dan hampir tidak ada pembatalan pada 3 permintaan atau lebih), dan kanal pemesanan (Complimentary 0\%, Corporate 11,5\%, Online Travel Agent 36,4\%).
   \item \textbf{Pola musiman}: rasio batal terendah pada Januari (2,6\%) dan Desember (12,1\%), tertinggi pada Juli (44,8\%). Korelasi linear \texttt{arrival\_month} hampir nol ($-0{,}016$) karena polanya naik lalu turun, sehingga perlu encoding melingkar.
 \end{itemize}
 
@@ -100,7 +100,9 @@ Seluruh kode from scratch (preprocessing, model, dan validasi) ditulis langsung 
 \begin{itemize}
   \item \texttt{src/main.ipynb}: notebook final yang mereproduksi submission Kaggle. Berisi pemahaman data, preprocessing bersama, model KNN final, Decision Tree terbaik, perbandingan scikit-learn, save/load model, submission, error analysis, dan cost-sensitive classification.
   \item \texttt{src/experiments/<model>/}: notebook eksperimen tiap model (\texttt{knn}, \texttt{dtl}, \texttt{lr}, \texttt{svm}, \texttt{nb}). Satu notebook untuk satu eksperimen.
-  \item \texttt{output/submissions/}: berkas submission; \texttt{output/models/}: model tersimpan (\texttt{.pkl}); \texttt{output/figures/}: gambar dan video untuk bonus.
+  \item \texttt{output/submissions/}: berkas submission.
+  \item \texttt{output/models/}: model tersimpan (\texttt{.pkl}).
+  \item \texttt{output/figures/}: gambar dan video untuk bonus.
 \end{itemize}
 Setiap model mengikuti antarmuka yang sama: \texttt{fit(X, y)}, \texttt{predict\_proba(X)} yang mengembalikan probabilitas kelas 1, dan \texttt{predict(X, threshold)}. Notebook mencetak checksum berkas submission untuk memeriksa reproduksibilitas. Eksperimen Naive Bayes memakai SHA-256.
 
@@ -173,7 +175,7 @@ Model & Transformasi & Alasan \\
 \midrule
 DTL & Dedupe, \texttt{num\_adults = 0} jadi missing, 7 fitur turunan, kategori langka ($<20$ baris) menjadi \texttt{Other}. NaN dan kategori teks dibiarkan, tanpa scaling & Pohon menangani missing dan kategori langsung. Split berbasis urutan nilai sehingga tidak terpengaruh skala \\
 LR & Indikator missing, imputasi median, \texttt{log1p}, encoding siklik, one-hot, binning berbasis target, interaksi fitur & Model linear butuh representasi yang menangkap hubungan tidak linear dan interaksi \\
-SVM & Imputasi, one-hot, standardisasi, ditambah fitur turunan & Kernel dihitung dari hasil kali dalam atau jarak sehingga sensitif terhadap skala \\
+SVM & Final: clipping, imputasi, seleksi fitur template, robust scaling berbobot, one-hot, dan dua fitur waktu & Kernel sensitif terhadap skala. Detail pipeline final dan historis dijelaskan pada bagian SVM \\
 NB & Baseline mengodekan kategori dengan bin tetap pada lead time dan tarif. Varian kontekstual mempelajari bin per kelompok dan menggabungkan kategori. Nilai kosong mendapat kode tersendiri & Peluang Categorical Naive Bayes dihitung dari frekuensi kode diskret \\
 \bottomrule
 \end{tabularx}
@@ -338,12 +340,113 @@ bv = b_new + beta * (b_new - b)
 Tuning dilakukan dalam empat tahap preprocessing khusus model linear (\texttt{lr\_fe}, \texttt{lr\_target\_bins}, \texttt{lr\_l1\_onehot}, \texttt{lr\_cross\_bins}), ditambah dua notebook yang memakai preprocessing bersama (\texttt{lr\_main\_prep} dan \texttt{lr\_main\_expand}).
 
 \section{Support Vector Machine}
-Kelas \texttt{SVM} menyelesaikan bentuk dual untuk kernel linear, polynomial, dan Gaussian. Subproblem QP diselesaikan dengan SLSQP dalam blok working set berisi paling banyak 64 variabel alpha, sehingga matriks kernel penuh tidak perlu disimpan. Fungsi keputusan $f(x)=\sum_{i\in SV}\alpha_i y_i K(x_i,x)+b$ dikalibrasi menjadi probabilitas dengan Platt scaling menggunakan holdout internal 20\%. Hyperparameter $C$ dan $\gamma$ dicari dengan \textbf{Particle Swarm Optimization (PSO)} \cite{ref:pso,ref:pso_shi}: setiap partikel adalah kandidat $(\log_{10}C, \log_{10}g)$, dan posisinya diperbarui dengan
-\begin{equation}
-  v_i \leftarrow w v_i + c_1 r_1 (p_i - x_i) + c_2 r_2 (g^{*} - x_i), \qquad x_i \leftarrow x_i + v_i,
-\end{equation}
-dengan fitness berupa Macro F1 OOF. \todo{Akram: lengkapi detail implementasi dan hasil PSO dari notebook \texttt{svm.ipynb} terbaru.}
+\begingroup
+\setlength{\emergencystretch}{3em}
+\subsection{Struktur implementasi dan fungsi utama}
+Implementasi SVM ditulis langsung di notebook pada \texttt{src/experiments/svm/}. Eksperimen yang digunakan adalah \texttt{svm\_baseline\_linear.ipynb}, \texttt{svm\_linear\_tuning.ipynb}, \texttt{svm\_gaussian.ipynb}, \texttt{svm\_poly.ipynb}, dan \texttt{svm\_final.ipynb}. Empat notebook pertama memakai konfigurasi dan preprocessing eksperimen awal. Notebook final memakai preprocessing bersama dari template untuk menghasilkan submission SVM. Kode model dan preprocessing ada di masing-masing notebook, sehingga tidak memerlukan modul \texttt{models/svm.py} atau preprocessor terpisah.
 
+\begin{table}[H]
+\centering
+\caption{Kelas dan fungsi utama pada notebook SVM final}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{5cm}X}
+\toprule
+Kelas/fungsi & Tanggung jawab \\
+\midrule
+\texttt{clean\_train}, \texttt{FinalSVMPreprocessor} & Deduplikasi train, belajar statistik preprocessing melalui \texttt{fit}, lalu menerapkan transformasi yang sama melalui \texttt{transform}. \\
+\texttt{SVM.fit}, \texttt{\_fit\_svm} & Validasi masukan, pelatihan SVM dual, dan penyimpanan support vector serta diagnostik konvergensi. \\
+\texttt{\_kernel} & Menghitung kernel linear, polynomial, atau Gaussian. \\
+\texttt{\_calibrate}, \texttt{\_fit\_sigmoid} & Memasang kalibrasi sigmoid dari holdout internal dengan BFGS. \\
+\texttt{decision\_function}, \texttt{predict\_proba}, \texttt{predict} & Menghasilkan skor keputusan, peluang kelas batal, dan label berdasarkan threshold. \\
+\texttt{cross\_val\_proba}, \texttt{best\_threshold} & Mengumpulkan peluang OOF dan memilih threshold Macro F1. \\
+\texttt{save\_model}, \texttt{load\_model} & Menyimpan dan memulihkan state model, preprocessor, parameter, dan threshold. \\
+\texttt{boundary\_plot}, \texttt{particle\_swarm} & Visualisasi tiga kernel dan pencarian hyperparameter untuk bonus. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Kelas \texttt{SVM} menyelesaikan masalah dual soft margin dengan label $-1$ dan $+1$. Koefisiennya dibatasi oleh $0\leq\alpha_i\leq C$ dan $\sum_i\alpha_i y_i=0$. Pelatihan dilakukan per blok. Setiap blok mengambil paling banyak 32 kandidat dari masing-masing sisi pelanggaran kondisi Karush--Kuhn--Tucker (KKT), sehingga jumlahnya paling banyak 64 koefisien. Cara ini menghindari penyimpanan matriks kernel penuh berukuran $n\times n$.
+
+Setiap blok diselesaikan dengan \texttt{scipy.optimize.minimize(method='SLSQP')} \cite{ref:scipy_slsqp}. NumPy dipakai untuk operasi matriks, sedangkan SciPy menangani SLSQP dan kalibrasi BFGS. Solver ini memakai dekomposisi blok, berbeda dari SMO dua variabel maupun algoritma Fan. Pelatihan model from scratch tidak memakai \texttt{SVC}.
+
+Setelah koefisien diperbarui, bias dihitung dari batas KKT dan support vector dipilih dari $\alpha_i>\epsilon$. Pada kernel linear, model menyimpan koefisien eksplisit agar prediksi lebih cepat. Masukan diperiksa agar berisi dua kelas, jumlah fitur yang sesuai, parameter yang valid, dan nilai finite. Model memberi peringatan jika toleransi KKT belum tercapai. Eksperimen final dijalankan pada CPU dengan \texttt{tol=0.01} dan \texttt{max\_iter=1000}. CUDA tersedia sebagai pilihan untuk menghitung kernel, tetapi solver SLSQP tetap berjalan pada CPU.
+
+% Kode berikut diambil langsung dari notebook final.
+\begin{lstlisting}[caption={Perhitungan tiga kernel, diambil dari notebook SVM final},label={lst:svm_kernel}]
+def _kernel(self, X, Y, xp=np):
+        with np.errstate(over='ignore', invalid='ignore'):
+            product = X @ Y.T
+            if self.kernel == 'poly':
+                result = (self.gamma_ * product + self.coef0) ** self.degree
+            elif self.kernel in ('gaussian', 'rbf'):
+                distance = (X ** 2).sum(axis=1)[:, None] + (Y ** 2).sum(axis=1) - 2.0 * product
+                result = xp.exp(-self.gamma_ * distance.clip(0.0, None))
+            else:
+                result = product
+        if not xp.isfinite(result).all():
+            raise ValueError('Perhitungan kernel tidak finite, periksa scaling dan parameter kernel.')
+        return result
+\end{lstlisting}
+
+
+Pada \texttt{\_fit\_svm}, \texttt{block} menyimpan bagian matriks $Q$ untuk working set. Kontribusi koefisien di luar blok disimpan dalam \texttt{linear}. Kendala SLSQP menjaga jumlah $\alpha_i y_i$ tetap sama selama pembaruan blok.
+\begin{lstlisting}[caption={Subproblem SLSQP dan pembaruan koefisien dual},label={lst:svm_solver}]
+result = minimize(lambda a: (0.5 * a @ block @ a + linear @ a, block @ a + linear),
+                  old, jac=True, method='SLSQP', bounds=[(0.0, self.C)] * len(old),
+                  constraints={'type': 'eq', 'fun': lambda a: labels @ (a - old),
+                               'jac': lambda a: labels},
+                  options={'ftol': min(1e-9, self.tol ** 2 * 1e-3), 'maxiter': 1000})
+if not result.success:
+    raise RuntimeError(f'Solver QP SVM gagal: {result.message}')
+self.alpha_[working] = result.x
+gradient += columns @ (result.x - old)
+\end{lstlisting}
+
+
+\subsection{Cleaning, seleksi fitur, dan preprocessing}
+Data mentah berisi 27.373 baris train, 6.844 baris test, dan 17 fitur masukan. \texttt{clean\_train} membuang 64 duplikat persis berdasarkan fitur dan target tanpa kolom ID, sehingga tersisa 27.309 baris. Tidak ada baris test yang dibuang. Nilai \texttt{num\_adults=0} ditandai sebagai missing.
+
+Empat eksperimen historis memakai imputasi median/modus, indikator missing, pengelompokan kategori dengan frekuensi kurang dari 20 sebagai \texttt{Other}, one-hot, dan standardisasi mean/std. Tujuh fitur turunannya adalah total malam, total tamu, indikator tarif nol, tarif per tamu, hari dalam minggu, hari dalam tahun, dan indeks tanggal kedatangan. Preprocessing ini menghasilkan 49 kolom. Skor leaderboard dari eksperimen tersebut dilaporkan terpisah dari pipeline final.
+
+Pada notebook final, kelas \texttt{FinalSVMPreprocessor} mengikuti urutan preprocessing template bersama:
+\begin{enumerate}
+  \item Pelajari kuantil 0,005 dan 0,995 dari bagian latih untuk clipping \texttt{num\_adults}, \texttt{weekend\_nights}, \texttt{weekday\_nights}, \texttt{days\_before\_arrival}, \texttt{nightly\_rate\_idr}, \texttt{prior\_cancellations}, dan \texttt{special\_requests}. Clipping membatasi pengaruh nilai ekstrem. Jika kedua batas sama, kolom tidak di-clip.
+  \item Bentuk \texttt{booking\_index} dari selisih tanggal kedatangan terhadap 1 Januari 2023 dikurangi lead time yang sudah di-clip, serta \texttt{month\_cos} sebagai $\cos(2\pi\,\text{bulan}/12)$. Keduanya mempertahankan informasi waktu pemesanan dan pola musiman.
+  \item Pilih 12 kolom numerik: \texttt{num\_adults}, \texttt{weekend\_nights}, \texttt{weekday\_nights}, \texttt{needs\_parking}, \texttt{days\_before\_arrival}, \texttt{arrival\_day}, \texttt{is\_returning\_guest}, \texttt{prior\_cancellations}, \texttt{nightly\_rate\_idr}, \texttt{special\_requests}, \texttt{booking\_index}, dan \texttt{month\_cos}. Tiga kolom kategori adalah \texttt{meal\_package}, \texttt{room\_category}, dan \texttt{booking\_channel}. Kolom dipilih mengikuti template dan belum diuji melalui ablation khusus SVM.
+  \item Imputasi numerik dengan median dan kategori dengan modus bagian latih. Kolom seluruhnya kosong memakai fallback 0 untuk numerik atau \texttt{Other} untuk kategori. Lakukan robust scaling $(x-\mathrm{median})/\mathrm{IQR}$ agar perbedaan satuan tidak mendominasi kernel. Jika IQR nol, gunakan standar deviasi, lalu 1 jika tetap tidak tersedia.
+  \item Bobot numerik adalah 2 untuk lead time dan special requests, 0,5 untuk parking dan weekday nights, 0,25 untuk jumlah dewasa, serta 1 untuk sisanya. One-hot kategori memakai amplitudo 0,75. Pembobotan mengikuti template untuk mengatur kontribusi fitur pada hasil kali dalam dan jarak. Bobot ini belum diestimasi dari importance SVM. Kategori baru menjadi vektor nol pada kelompok kategorinya.
+\end{enumerate}
+Pipeline final menghasilkan 28 kolom \texttt{float32}. Seluruh statistik clipping, imputasi, scaling, dan kategori dipelajari dari bagian latih tiap fold, lalu diterapkan secara terpisah pada validasi dan test. Hasil transformasinya sudah dibandingkan dengan template pada data fit, validasi, dan test, dan matriksnya sama. Pipeline ini tidak memakai indikator missing, penggabungan kategori langka, atau resampling. PCA juga tidak digunakan karena jumlah fitur masih dapat ditangani, sementara visualisasi bonus cukup memakai dua fitur langsung.
+
+\subsection{Kalibrasi, validasi, dan pemilihan konfigurasi}
+Probabilitas kelas batal dihitung dengan kalibrasi sigmoid Platt \cite{ref:platt_prob}: $P(y=1\mid x)=1/(1+\exp(Af(x)+B))$. SVM sementara dilatih pada 80\% bagian latih setiap kelas, kemudian skor pada holdout internal 20\% dipakai untuk memasang $A,B$ dengan target yang dihaluskan dan BFGS \cite{ref:scipy_bfgs}. SVM utama dilatih pada seluruh bagian latih fold, terpisah dari SVM sementara untuk kalibrasi. Data fold validasi luar dan test tidak dipakai memasang sigmoid.
+
+SVM final divalidasi dengan \texttt{StratifiedKFold}, lima fold, shuffle aktif, dan seed 5. Macro F1 adalah rata-rata F1 kedua kelas. Threshold dipilih dari peluang OOF gabungan. Pembanding memakai \texttt{SVC} pada preprocessing dan fold luar yang sama, lalu \texttt{CalibratedClassifierCV} dengan metode sigmoid, \texttt{ensemble=False}, dan tiga fold internal ber-seed 5. Kedua model memakai parameter kernel dan data yang sama, tetapi cara kalibrasinya berbeda. Implementasi sendiri memakai holdout internal, sedangkan pustaka memakai validasi silang internal.
+
+Pencarian awal memakai \texttt{SVC} untuk menyaring 24 konfigurasi pada maksimum 1.200 sampel train stratified: linear $C\in\{0{,}01;0{,}1;1\}$, polynomial $C\in\{0{,}1;1;10\}$ dan $d\in\{2,3\}$ dengan \texttt{gamma='scale'}, $r=1$, serta Gaussian $C\in\{0{,}1;0{,}3;1;3;10\}$ dan $\gamma\in\{0{,}01;0{,}1;1\}$. Penyaringan ini memakai lima fold luar dan tiga fold kalibrasi internal. Skornya hanya dipakai untuk memilih kandidat yang akan diperiksa dengan model from scratch pada seluruh data.
+
+Kandidat Gaussian dengan $C=0{,}3$ dan $\gamma=1$ kemudian diuji memakai model from scratch pada seluruh 27.309 baris dengan preprocessing template. Pencarian dihentikan setelah kandidat ini melewati target perbaikan terhadap polynomial awal. Ketiga kernel sudah masuk penyaringan, tetapi pengujian penuh pipeline final baru selesai untuk kandidat Gaussian tersebut. Model ini dipilih sebagai SVM final. Hasilnya belum menjamin konfigurasi terbaik karena kandidat tidak diuji seluruhnya. Model dan threshold juga dipilih dari label OOF yang sama, sehingga skor OOF masih dipengaruhi proses seleksi.
+
+\subsection{Penyimpanan dan reproduksi submission}
+Model final dilatih ulang pada seluruh train bersih dengan $C=0{,}3$, $\gamma=1$, dan threshold 0,25. Bundle \texttt{output/models/svm\_final.pkl} memuat state preprocessor, state SVM, identitas kelas, parameter, dan threshold. \texttt{load\_model} memulihkan objek dari state dan definisi kelas di notebook. Karena itu, sel definisi kelas perlu dijalankan sebelum membuka bundle dari kernel baru. Prediksi setelah save/load sudah diperiksa sama dengan CSV final untuk seluruh 6.844 baris test. Urutan ID mengikuti sample submission. Seluruh prediksi berasal dari satu SVM from scratch, tanpa ensemble maupun penggantian hasil oleh \texttt{SVC}.
+
+\subsection{Bonus optimasi dengan PSO}
+Particle Swarm Optimization (PSO) mencari hyperparameter melalui sekumpulan kandidat yang disebut partikel. Setiap partikel bergerak mengikuti posisi terbaiknya sendiri dan posisi terbaik yang ditemukan swarm \cite{ref:pso,ref:pso_shi,ref:pso_svm}. Untuk kernel Gaussian yang terpilih, posisi partikel adalah $(\log_{10}C,\log_{10}g)$ dengan $C\in[0{,}01,10]$ dan faktor $g\in[0{,}05,5]$ yang mengalikan gamma dasar 1. Kernel linear cukup mencari $C$, sedangkan derajat polynomial dan \texttt{coef0} dipertahankan jika kernel tersebut digunakan.
+\begin{equation}
+v_i\leftarrow 0{,}7v_i+1{,}5r_1(p_i-x_i)+1{,}5r_2(g^*-x_i),\qquad x_i\leftarrow x_i+v_i.
+\end{equation}
+Setiap komponen $r_1,r_2$ diambil acak dari $[0,1]$. Kecepatan dibatasi 25\% lebar rentang dan posisi di-clip ke batas. Delapan partikel dan empat generasi menghasilkan 32 evaluasi dengan seed 5. Baseline dimasukkan sebagai partikel awal. Fitness adalah Macro F1 OOF lima fold pada 800 baris development, dengan threshold dipilih dari OOF development. Preprocessing dipasang ulang pada bagian latih tiap fold dan hasil transformasi di-cache untuk kandidat lain. Setelah pencarian selesai, baseline dan kandidat terbaik diuji pada 400 baris holdout stratified dengan threshold dari development. Baris holdout terpisah dari development PSO, tetapi sebelumnya ikut dipakai dalam pemilihan kernel utama pada seluruh train. Hasil holdout ini karena itu hanya dipakai untuk menilai pencarian PSO pada eksperimen bonus. Model dan CSV final tetap memakai konfigurasi sebelum PSO.
+\begin{lstlisting}[caption={Pembaruan kecepatan dan posisi partikel pada PSO},label={lst:svm_pso}]
+velocity = (0.7 * velocity
+            + 1.5 * rng.random(positions.shape) * (personal - positions)
+            + 1.5 * rng.random(positions.shape) * (global_best - positions))
+# Batasi langkah dan posisi agar pencarian tetap berada dalam rentang hyperparameter.
+velocity = np.clip(velocity, -0.25 * (upper - lower), 0.25 * (upper - lower))
+positions = np.clip(positions + velocity, lower, upper)
+\end{lstlisting}
+
+
+
+\endgroup
 \section{Naive Bayes}
 \input{bab/nb/implementasi}
 
