@@ -6,13 +6,13 @@ Tugas Besar 2 IF3170 Inteligensi Artifisial: prediksi pembatalan pemesanan pengi
 
 Setiap anggota memegang satu model, lengkap dengan implementasi from scratch, perbandingan scikit-learn, bonus visualisasi dan optimasi, serta bab laporannya.
 
-| Model | Pemilik | Notebook eksperimen |
-| --- | --- | --- |
-| Decision Tree | Reinsen | `src/experiments/dtl/` |
-| KNN | Manu | `src/experiments/knn/` |
-| Logistic Regression | Juan | `src/experiments/lr/` |
-| SVM | Akram | `src/experiments/svm/` |
-| Naive Bayes | Argha | `src/experiments/nb/` |
+| Model               | Pemilik | Notebook eksperimen    |
+| ------------------- | ------- | ---------------------- |
+| Decision Tree       | Reinsen | `src/experiments/dtl/` |
+| KNN                 | Manu    | `src/experiments/knn/` |
+| Logistic Regression | Juan    | `src/experiments/lr/`  |
+| SVM                 | Akram   | `src/experiments/svm/` |
+| Naive Bayes         | Argha   | `src/experiments/nb/`  |
 
 ## Struktur Folder
 
@@ -26,12 +26,14 @@ data/
 └── sample_submission.csv
 output/
 ├── submissions/            # submission_<eksperimen>.csv
-└── models/                 # <eksperimen>.pkl, dibuat saat notebook dijalankan
+├── models/                 # <eksperimen>.pkl, dibuat saat notebook dijalankan
+└── figures/                # gambar dan visualisasi eksperimen
+docs/
+├── laporan.pdf             # laporan hasil kompilasi
+└── laporan/                # sumber LaTeX dan gambar laporan
 ```
 
 Semua kode from scratch (preprocessing, model, validasi) ditulis langsung di dalam notebook. Format notebook mengikuti template tugas.
-
-Hasil SVM final dan cara menjalankannya dijelaskan di [`src/experiments/svm/README.md`](src/experiments/svm/README.md). CSV final berada di `output/submissions/submission_svm_final.csv`, dengan public score Kaggle **0.85189**.
 
 ## Notebook Final (`src/main.ipynb`)
 
