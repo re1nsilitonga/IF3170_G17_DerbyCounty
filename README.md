@@ -29,7 +29,7 @@ output/
 └── models/                 # <eksperimen>.pkl, dibuat saat notebook dijalankan
 ```
 
-Notebook DTL, KNN, Logistic Regression, dan Naive Bayes memuat kode from scratch secara langsung. Notebook SVM memakai implementasi bersama di `src/models/svm.py` dan helper validasi di `src/utils.py`. Preprocessing eksperimen SVM lama berada di `src/preprocessing/`, sedangkan preprocessing SVM final ditulis langsung di notebook. Format notebook mengikuti template tugas.
+Semua kode from scratch (preprocessing, model, validasi) ditulis langsung di dalam notebook. Format notebook mengikuti template tugas.
 
 Hasil SVM final dan cara menjalankannya dijelaskan di [`src/experiments/svm/README.md`](src/experiments/svm/README.md). CSV final berada di `output/submissions/submission_svm_final.csv`, dengan public score Kaggle **0.85189**.
 
