@@ -1,0 +1,404 @@
+\chapter{Hasil dan Analisis}
+
+Kecuali disebutkan lain, angka pada bab ini adalah Macro F1 dari prediksi out-of-fold (OOF) 5-fold pada 27.309 baris data latih hasil dedupe, dengan threshold yang dipilih dari OOF. Data uji tidak dipakai untuk memilih konfigurasi. Skor public adalah skor leaderboard Kaggle dari berkas submission yang diunggah.
+
+\section{Ringkasan Model Terbaik}
+
+\begin{table}[H]
+\centering
+\caption{Model terbaik tiap algoritma from scratch}
+\label{tab:ringkasan}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.6cm}X rr}
+\toprule
+Model & Konfigurasi & OOF & Public \\
+\midrule
+\textbf{KNN + kembar} & Minkowski $p=1{,}5$, $k=17$, bobot $1/d^2$, preprocessing bersama, vote booking kembar & \textbf{0,8529} & \todo{skor} \\
+KNN & Sama, tanpa vote booking kembar & 0,8476 & -- \\
+DTL & Gain ratio (C4.5), depth 30, leaf 5, min gain $2\times10^{-4}$ & 0,8343 & 0,84679 \\
+LR & L2, bin berbasis target, interaksi, sel dua dimensi (\texttt{lr\_cross\_bins}) & 0,8344 & 0,83542 \\
+SVM & Polynomial, $C=1$, $d=3$ & 0,7943 & \todo{} \\
+NB & Categorical, 17 fitur asli, $\alpha=1$ & 0,7342 & 0,73697 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+KNN dengan vote booking kembar adalah model final kelompok dan mencapai \textbf{peringkat 1} pada public leaderboard. \todo{tulis skor public dan private akhir}. Notebook \texttt{src/main.ipynb} mereproduksi berkas submission tersebut secara identik, dengan md5
+\begin{center}\texttt{39505c42f93d193ce99a023cabd3e9d9}\end{center}
+
+\section{Hasil K-Nearest Neighbors}
+
+\subsection{Baseline}
+Baseline memakai $k=5$, jarak Euclidean, voting seragam, dan 39 kolom hasil imputasi, one-hot, dan standardisasi z-score tanpa fitur turunan (notebook \texttt{knn\_baseline}).
+
+\begin{table}[H]
+\centering
+\caption{KNN baseline: from scratch vs scikit-learn}
+\label{tab:knn_baseline}
+\begin{tabular}{lrr}
+\toprule
+Metrik & From scratch & scikit-learn \\
+\midrule
+Macro F1 OOF (threshold 0,41) & 0,7632 & 0,7632 \\
+Std antar-fold & 0,0034 & 0,0034 \\
+F1 kelas 0 / kelas 1 & 0,8519 / 0,6746 & identik \\
+Selisih probabilitas OOF maksimum & \multicolumn{2}{c}{0 (identik pada 27.309 baris)} \\
+Waktu CV 5-fold & sekitar 92 detik & sekitar 9 detik \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{knn_baseline_comparison.png}
+\caption{KNN baseline: Macro F1 per fold, confusion matrix OOF, dan distribusi probabilitas OOF}
+\label{fig:knn_baseline}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{knn_baseline_k_sweep.png}
+\caption{Sensitivitas $k$ pada KNN baseline}
+\label{fig:knn_ksweep}
+\end{figure}
+
+\subsection{Perkembangan KNN}
+
+\begin{table}[H]
+\centering
+\caption{Perkembangan konfigurasi KNN sampai model final}
+\label{tab:knn_progres}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.6cm}X rr}
+\toprule
+Notebook & Perubahan & OOF & Public \\
+\midrule
+\texttt{knn\_baseline} & Euclidean, $k=5$, seragam, 39 kolom & 0,7632 & -- \\
+\texttt{knn\_forward\_selection} & Forward selection 7 fitur, Manhattan, $k=15$, vote terbobot jarak & 0,8373 & 0,84872 \\
+\texttt{knn\_selection\_distance} & Seleksi fitur dengan vote terbobot jarak, 8 fitur, $k=19$ & 0,8411 & 0,85505 \\
+\texttt{knn\_feature\_weight} & Bobot fitur hasil coordinate search & 0,8453 & 0,85469 \\
+\texttt{knn\_robust\_clip\_minkowski\_weighted} & Dedupe, data error, clipping, robust scaler, $p=1{,}5$, bobot $1/d^2$, $k=19$, 15 fitur & 0,8481 & 0,864 \\
+\texttt{knn\_robust\_clip\_minkowski\_weighted\_twin} & + vote booking kembar (toleransi lead 5 hari, tanggal 5 hari) & 0,8520\textsuperscript{b} & 0,87119 \\
+model final (\texttt{src/main.ipynb}) & Toleransi lead 10 hari, tanggal 2 hari, harga 6\%, $\alpha=0{,}8$, threshold 0,4845 & 0,8531\textsuperscript{b} & \todo{} \\
+\bottomrule
+\end{tabularx}
+
+\raggedright\footnotesize \textsuperscript{b} Rata-rata OOF pada tiga seed fold (4, 5, 42) dengan threshold tetap, karena perbedaan antarkonfigurasi kembar sangat kecil.
+\end{table}
+
+\subsection{Model final: KNN dengan vote booking kembar}
+
+\begin{table}[H]
+\centering
+\caption{KNN final: holdout, OOF, dan perbandingan dengan scikit-learn}
+\label{tab:knn_final}
+\begin{tabular}{lr}
+\toprule
+Metrik & Nilai \\
+\midrule
+Macro F1 holdout, KNN + kembar & 0,8592 \\
+Macro F1 holdout, KNN saja & 0,8539 \\
+Macro F1 OOF 5-fold, KNN + kembar (threshold 0,4845) & 0,8529 \\
+Macro F1 OOF 5-fold, KNN saja & 0,8476 \\
+Confusion matrix OOF [TN, FP; FN, TP] & [16.728, 1.637; 1.877, 7.067] \\
+F1 kelas 0 / kelas 1 (OOF) & 0,9049 / 0,8009 \\
+Macro F1 holdout KNN scikit-learn vs from scratch & 0,8539 vs 0,8539 \\
+Selisih probabilitas maksimum terhadap scikit-learn & sekitar $10^{-7}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{knn_threshold.png}
+\caption{Macro F1 OOF KNN final terhadap threshold}
+\label{fig:knn_threshold}
+\end{figure}
+
+Setiap pilihan preprocessing dan parameter kembar diuji ulang dengan mengganti satu pilihan dan mempertahankan yang lain (Tabel~\ref{tab:knn_audit}). Semua angka adalah rata-rata OOF pada tiga seed fold dengan threshold 0,48.
+
+\begin{table}[H]
+\centering
+\caption{Uji pilihan preprocessing dan vote kembar (rata-rata OOF 3 seed fold)}
+\label{tab:knn_audit}
+\small
+\begin{tabular}{llr}
+\toprule
+Bagian & Varian & OOF \\
+\midrule
+Dasar & robust, clip 0,5\%, median, $1/d^2$, kembar 10/2/5\% & 0,8528 \\
+\midrule
+\multirow{3}{*}{Scaler} & z-score & 0,8498 \\
+ & rank & 0,8463 \\
+ & min-max & 0,8444 \\
+\midrule
+\multirow{3}{*}{Missing} & imputasi sebelum fitur turunan & 0,8524 \\
+ & kategori kosong menjadi one-hot nol & 0,8513 \\
+ & jarak mengabaikan kolom kosong & 0,8465 \\
+\midrule
+\multirow{2}{*}{Bobot vote} & $1/d$ & 0,8516 \\
+ & Gaussian & 0,8473 \\
+\midrule
+\multirow{3}{*}{Clipping} & persentil 1\% & 0,8525 \\
+ & IQR $\times3$ & 0,8529 \\
+ & tanpa clipping & 0,8529 \\
+\midrule
+\multirow{3}{*}{Toleransi kembar} & lead 5, tanggal 5 hari & 0,8520 \\
+ & lead 12, tanggal 2 hari & 0,8526 \\
+ & harga 0\% / 2\% / 10\% & 0,8497 / 0,8521 / 0,8523 \\
+\midrule
+\multirow{4}{*}{Bobot kembar} & $\alpha$ = 0,5 / 0,6 & 0,8516 / 0,8525 \\
+ & $\alpha$ = 0,9 / 1,0 & 0,8524 / 0,8506 \\
+ & minimal 1 kembar & 0,8511 \\
+ & minimal 3 kembar & 0,8527 \\
+\midrule
+Final & harga 6\%, $\alpha=0{,}8$, threshold 0,4845 & \textbf{0,8531} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Analisis KNN}
+\begin{enumerate}
+  \item \textbf{Kebenaran implementasi.} Pada baseline, probabilitas OOF from scratch identik dengan scikit-learn di seluruh 27.309 baris. Pada konfigurasi final, selisih probabilitas maksimum hanya sekitar $10^{-7}$ (presisi float32) dan Macro F1 holdout sama persis.
+  \item \textbf{Representasi fitur paling menentukan.} KNN yang sama naik dari 0,7632 ke 0,8481 hanya dengan seleksi fitur, bobot fitur, robust scaler, clipping, dan jarak Minkowski $p=1{,}5$. Fitur yang tidak relevan ikut menentukan jarak dengan bobot yang sama, sehingga membuangnya memberi kenaikan terbesar.
+  \item \textbf{Robust scaler dan jarak $p=1{,}5$.} Z-score, min-max, dan rank terpengaruh ekor panjang lead time dan harga. Jarak $p=1{,}5$ berada di antara Manhattan dan Euclidean sehingga satu kolom dengan selisih besar tidak terlalu mendominasi.
+  \item \textbf{Vote booking kembar.} Pemesanan kembar hampir selalu berlabel sama (93,2\%), tetapi lead time-nya berbeda beberapa hari karena noise. KNN biasa dapat melewatkan kembar ini, sedangkan vote kembar memakainya secara langsung. Holdout naik dari 0,8539 ke 0,8592 dan OOF dari 0,8476 ke 0,8529. Toleransi lead time 10 hari lebih baik daripada 5 hari, sesuai temuan bahwa noise ada pada lead time.
+  \item \textbf{Area yang datar.} Variasi parameter kembar di sekitar konfigurasi final hanya mengubah OOF sekitar $\pm0{,}001$. Konfigurasi berada di area yang stabil, bukan puncak sempit.
+\end{enumerate}
+
+\section{Hasil Decision Tree}
+
+\begin{table}[H]
+\centering
+\caption{Perkembangan Decision Tree (OOF seed 42 dan rata-rata seed 1 sampai 5)}
+\label{tab:dtl_progres}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.4cm}X rrrrr}
+\toprule
+Notebook & Perubahan & OOF & Std & Seed 1--5 & Leaf & Public \\
+\midrule
+\texttt{dtl\_baseline\_no\_fe} & CART gini, depth 12, leaf 10 & 0,8271 & 0,0031 & 0,8249 & 470 & -- \\
+\texttt{dtl\_baseline\_fe} & + 7 fitur turunan & 0,8291 & 0,0076 & 0,8293 & 459 & 0,83740 \\
+\texttt{dtl\_gini\_mingain} & min gain $2\times10^{-4}$, depth 30, leaf 5 & 0,8310 & 0,0054 & 0,8322 & 140 & 0,84473 \\
+\texttt{dtl\_entropy\_mingain} & entropy, min gain $4{,}5\times10^{-4}$, leaf 3 & 0,8332 & 0,0045 & 0,8315 & 150 & -- \\
+\texttt{dtl\_gain\_ratio} & gain ratio (C4.5), min gain $2\times10^{-4}$, leaf 5 & \textbf{0,8343} & \textbf{0,0028} & \textbf{0,8350} & 253 & \textbf{0,84679} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.48\textwidth]{dtl_grid_gini.png}\hfill
+\includegraphics[width=0.48\textwidth]{dtl_grid_gain_ratio.png}
+\caption{Grid search pre-pruning (Macro F1 OOF): gini (kiri) dan gain ratio (kanan)}
+\label{fig:dtl_grid}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Decision Tree: from scratch vs scikit-learn pada holdout}
+\label{tab:dtl_sklearn}
+\begin{tabular}{lrr}
+\toprule
+Model & Jumlah leaf & Macro F1 holdout \\
+\midrule
+DTL from scratch (gain ratio) & 273 & \textbf{0,8372} \\
+scikit-learn, parameter sama (entropy) & 480 & 0,8297 \\
+scikit-learn ID3 (entropy, tanpa batas) & 2.513 & 0,8120 \\
+scikit-learn C4.5 (entropy + \texttt{ccp\_alpha} $3\times10^{-4}$) & 343 & 0,8366 \\
+scikit-learn CART (gini, tanpa batas) & 2.661 & 0,8063 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Cost-complexity pruning pada pohon gain ratio (OOF seed 42)}
+\label{tab:dtl_ccp}
+\begin{tabular}{rrr}
+\toprule
+\texttt{ccp\_alpha} & Rata-rata leaf & Macro F1 OOF \\
+\midrule
+0 sampai $2\times10^{-4}$ & 278 & 0,8343 \\
+$3\times10^{-4}$ & 218 & \textbf{0,8348} \\
+$5\times10^{-4}$ & 145 & 0,8338 \\
+$8\times10^{-4}$ & 96 & 0,8267 \\
+$1{,}2\times10^{-3}$ & 61 & 0,8140 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{dtl_ccp.png}
+\caption{Cost-complexity pruning: \texttt{ccp\_alpha} terhadap skor dan ukuran pohon}
+\label{fig:dtl_ccp}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{dtl_tree_top3.png}
+\caption{Tiga level teratas pohon DTL final (\texttt{plot\_tree} dengan \texttt{top\_n=3})}
+\label{fig:dtl_tree}
+\end{figure}
+
+\paragraph{Analisis Decision Tree.}
+\begin{enumerate}
+  \item \textbf{Pruning paling menentukan.} Pohon tanpa batas (scikit-learn ID3 dan CART, lebih dari 2.500 leaf) paling rendah karena overfit. Pre-pruning dengan minimum gain memangkas pohon dari 459 menjadi 140 leaf sekaligus menaikkan OOF di 5 dari 5 seed fold.
+  \item \textbf{Gain ratio paling stabil.} Gain ratio mendapat OOF tertinggi, simpangan baku antar-fold terkecil (0,0028), dan public tertinggi (0,84679). Information gain cenderung memilih split yang memecah data sangat tidak seimbang, sedangkan gain ratio menormalkannya dengan split information.
+  \item \textbf{Kenaikan harus dicek di seed lain.} Entropy dengan min gain $4{,}5\times10^{-4}$ naik di seed 42 (0,8332) tetapi turun rata-rata di seed 1 sampai 5 (0,8315 vs 0,8322). Kenaikan di satu pembagian fold dapat hanya kebetulan.
+  \item \textbf{Categorical dan missing langsung di pohon.} DTL from scratch membaca 19.933 nilai kosong dan 3 kolom kategorikal tanpa imputasi maupun one-hot, dan unggul atas scikit-learn dengan parameter yang sama yang membutuhkan one-hot dan imputasi (0,8372 vs 0,8297).
+  \item \textbf{Cost-complexity pruning.} $\alpha$ sampai $2\times10^{-4}$ tidak memangkas apa pun karena minimum gain $2\times10^{-4}$ sudah mencegah split sekecil itu. $\alpha=3\times10^{-4}$ memangkas 22\% leaf dan sedikit menaikkan OOF, sedangkan $\alpha$ yang terlalu besar menyebabkan underfit. Versi dengan pruning ini mendapat public 0,84604, sedikit di bawah versi tanpa pruning, sehingga model final tetap tanpa pruning.
+  \item \textbf{Struktur pohon.} Split pertama adalah lead time 156,5 hari. Pemesanan jauh hari dengan special requests paling banyak 2 dan harga di atas sekitar Rp1,7 juta hampir pasti batal (97\%), sedangkan tamu lama dengan lead time di bawah 37 hari tidak ada yang batal.
+\end{enumerate}
+
+\section{Hasil Logistic Regression}
+
+\begin{table}[H]
+\centering
+\caption{Tahapan tuning Logistic Regression (OOF seed 42)}
+\label{tab:lr_tahap}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3cm}X rr}
+\toprule
+Tahap & Perubahan & OOF & Public \\
+\midrule
+baseline & Data tanpa feature engineering, L2 & 0,7595 & -- \\
+threshold & + tuning threshold (0,45) & 0,7671 & -- \\
+\texttt{lr\_fe} & Bin kuantil, one-hot, interaksi 14 fitur, L2 & 0,8231 & 0,82860 \\
+\texttt{lr\_target\_bins} & Bin berbasis target (16 bin), L2 dengan $C=0{,}01$ & 0,8276 & 0,83176 \\
+\texttt{lr\_l1\_onehot} & One-hot jumlah tamu, L1 & 0,8297 & 0,83480 \\
+\texttt{lr\_cross\_bins} & + sel dua dimensi lead time $\times$ waktu kedatangan, 2.814 kolom & \textbf{0,8344} & \textbf{0,83542} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Dengan preprocessing bersama (28 kolom), Logistic Regression hanya mendapat 0,7644 (\texttt{lr\_main\_prep}). Dengan ekspansi fitur khusus model linear di atas preprocessing bersama (\texttt{lr\_main\_expand}), skornya naik ke 0,8225, dan grid regularisasi menghasilkan L1, L2, dan Elastic Net yang hampir setara (0,8194 sampai 0,8225).
+
+\begin{table}[H]
+\centering
+\caption{Logistic Regression: from scratch vs scikit-learn (\texttt{lr\_cross\_bins}, holdout)}
+\label{tab:lr_sklearn}
+\begin{tabular}{lrrrr}
+\toprule
+Model & Iterasi & Bobot tidak nol & Log-loss & Macro F1 \\
+\midrule
+From scratch L2 (FISTA) & 1.337 & 2.814 & 0,36342 & 0,8273 \\
+From scratch L1 (FISTA) & 432 & 1.234 & 0,33452 & 0,8330 \\
+scikit-learn L2 (lbfgs) & 532 & 2.814 & 0,36329 & 0,8272 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{lr_cross_bins_contour.png}
+\caption{Kontur log-loss dan lintasan parameter $(\theta_0,\theta_1)$ selama training (cuplikan video bonus)}
+\label{fig:lr_contour}
+\end{figure}
+
+\paragraph{Analisis Logistic Regression.}
+\begin{enumerate}
+  \item \textbf{Kebenaran implementasi.} Objektif L2 from scratch (0,258208) hampir sama dengan scikit-learn (0,258200), dengan Macro F1 holdout 0,8273 vs 0,8272.
+  \item \textbf{Model linear butuh representasi tidak linear.} Hubungan lead time dengan pembatalan tidak linear, sehingga satu bobot per fitur tidak cukup. Binning, interaksi, dan sel dua dimensi menaikkan OOF dari 0,7671 ke 0,8344.
+  \item \textbf{L1 sebagai seleksi fitur.} Pada 2.814 kolom, L1 hanya mempertahankan 1.234 bobot tidak nol dan memberi log-loss lebih rendah.
+  \item \textbf{FISTA lebih cepat.} Pada contoh dua parameter, gradient descent butuh 174 iterasi (learning rate 0,5) atau 32 iterasi (learning rate 7), sedangkan FISTA hanya 16 iterasi untuk mencapai loss yang sama (0,59674).
+\end{enumerate}
+
+\section{Hasil Support Vector Machine}
+\todo{Akram: perbarui tabel ini dengan hasil \texttt{svm.ipynb} terbaru (data penuh) dan hasil PSO. Angka di bawah berasal dari eksperimen SVM sebelum notebook digabung.}
+
+\begin{table}[H]
+\centering
+\caption{SVM: from scratch vs scikit-learn}
+\label{tab:svm}
+\begin{tabular}{llrrr}
+\toprule
+Kernel & Model & Threshold & Macro F1 OOF & Std \\
+\midrule
+\multirow{2}{*}{Linear, $C=0{,}01$} & From scratch & 0,45 & 0,7656 & 0,0050 \\
+ & scikit-learn SVC & 0,44 & 0,7659 & 0,0043 \\
+\multirow{2}{*}{Linear, $C=0{,}1$} & From scratch & 0,44 & 0,7659 & 0,0053 \\
+ & scikit-learn SVC & 0,44 & 0,7658 & 0,0049 \\
+Polynomial, $C=1$, $d=3$ & From scratch & 0,40 & 0,7943 & 0,0034 \\
+Gaussian, $C=1$ & From scratch & 0,43 & 0,7907 & 0,0036 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Analisis SVM.} Untuk kernel linear, selisih Macro F1 dengan scikit-learn hanya sekitar 0,0003. Kernel polynomial dan Gaussian unggul sekitar 0,03 atas kernel linear, menandakan batas keputusan tidak linear terhadap fitur. Jumlah support vector yang besar menandakan kelas sangat tumpang tindih di ruang fitur ini. \todo{Akram: analisis PSO dan gambar bidang pemisah tiap kernel.}
+
+\section{Hasil Naive Bayes}
+
+\begin{table}[H]
+\centering
+\caption{Naive Bayes: from scratch vs scikit-learn \texttt{CategoricalNB}}
+\label{tab:nb}
+\begin{tabular}{llrrrr}
+\toprule
+Fitur & Model & Threshold & Macro F1 OOF & Std & Selisih $\hat{p}$ maks. \\
+\midrule
+\multirow{2}{*}{2 fitur} & From scratch & 0,44 & 0,6652 & 0,0041 & \multirow{2}{*}{$6{,}1\times10^{-16}$} \\
+ & scikit-learn & 0,44 & 0,6652 & 0,0041 & \\
+\multirow{2}{*}{17 fitur} & From scratch & 0,42 & 0,7342 & 0,0084 & \multirow{2}{*}{$6{,}0\times10^{-15}$} \\
+ & scikit-learn & 0,42 & 0,7342 & 0,0084 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Analisis Naive Bayes.} Probabilitas from scratch identik dengan \texttt{CategoricalNB} hingga galat pembulatan. Naive Bayes adalah model terlemah karena asumsi independensi dilanggar oleh fitur yang saling berkorelasi (misalnya jumlah malam akhir pekan dan hari kerja, tahun dan bulan kedatangan, status tamu lama dan riwayat pemesanan). Bukti yang sama dihitung lebih dari sekali sehingga probabilitas terlalu ekstrem, terlihat dari FP yang tinggi (3.917 pada OOF). Pengelompokan lead time menjadi tiga rentang juga menghilangkan sebagian informasi dari prediktor terkuat. \todo{Argha: tambahkan gambar graf hubungan fitur dan kelas jika bonus Naive Bayes dikerjakan.}
+
+\section{Analisis Perbandingan Antar-Model}
+\begin{enumerate}
+  \item \textbf{Peringkat.} KNN + kembar (0,8529) $>$ KNN (0,8476) $>$ DTL ($\approx$0,834) $\approx$ LR ($\approx$0,834) $>$ SVM kernel (0,79) $>$ NB (0,73). Urutan public leaderboard sejalan dengan urutan OOF.
+  \item \textbf{Representasi fitur lebih menentukan daripada algoritma.} KNN naik dari 0,7632 ke 0,8476 dan LR dari 0,7595 ke 0,8344 hanya dengan mengubah representasi fitur. Decision Tree kuat tanpa banyak rekayasa fitur karena seleksi fitur sudah melekat pada pemilihan split.
+  \item \textbf{Memahami cara data dibuat.} Kenaikan terbesar KNN final datang dari analisis noise: pemesanan kembar hampir selalu berlabel sama, dan noise ada pada lead time. Informasi ini dipakai langsung lewat vote kembar.
+  \item \textbf{Threshold menggantikan resampling.} Semua threshold OOF berada di 0,40 sampai 0,53, sebagian besar di bawah 0,5. Karena kelas batal hanya 32,8\%, menurunkan threshold menyeimbangkan recall kelas minoritas dan menaikkan Macro F1 tanpa data sintetis.
+  \item \textbf{Kesetaraan dengan pustaka.} Implementasi from scratch setara dengan scikit-learn: KNN dan Naive Bayes identik secara numerik, LR berselisih 0,0001, dan DTL dengan cost-complexity pruning menghasilkan pohon yang sama persis dengan scikit-learn pada parameter yang sama.
+\end{enumerate}
+
+\section{Cost-sensitive Classification}
+False Positive (diprediksi batal, ternyata datang) lebih mahal karena penginapan dapat overbooked. Diasumsikan biaya FP dua kali FN, sehingga total biaya adalah $2\,FP + FN$. Dengan probabilitas yang terkalibrasi, keputusan dengan biaya harapan minimum adalah memprediksi batal jika $\hat{p}\,C_{FN} > (1-\hat{p})\,C_{FP}$, yaitu $\hat{p} > C_{FP}/(C_{FP}+C_{FN}) = 2/3$ \cite{ref:elkan}. Threshold juga dicari langsung dari prediksi OOF model final.
+
+\begin{table}[H]
+\centering
+\caption{Pengaruh threshold pada biaya (OOF KNN + kembar)}
+\label{tab:cost}
+\begin{tabular}{lrrrrrr}
+\toprule
+Threshold & Nilai & FP & FN & Biaya & Macro F1 & Prediksi batal \\
+\midrule
+Macro F1 maksimum & 0,4845 & 1.637 & 1.877 & 5.151 & 0,8529 & 31,9\% \\
+Teori $2/3$ & 0,6667 & 764 & 2.931 & 4.459 & 0,8350 & 24,8\% \\
+Biaya minimum (OOF) & 0,74 & 494 & 3.423 & \textbf{4.411} & 0,8197 & 22,0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{cost_sensitive.png}
+\caption{Total biaya dan Macro F1 terhadap threshold}
+\label{fig:cost}
+\end{figure}
+
+Dengan biaya FP dua kali FN, threshold dinaikkan dari 0,4845 ke sekitar 0,67 sampai 0,74, dan biaya turun 14\%. FP turun dari 1.637 ke 494, tetapi FN naik dari 1.877 ke 3.423 dan Macro F1 turun ke 0,8197. Model dan preprocessing tidak berubah, yang berubah hanya threshold keputusan. Threshold empiris (0,74) dekat dengan teori (0,67), menandakan probabilitas model cukup terkalibrasi. Untuk kompetisi tetap dipakai threshold Macro F1 karena metrik Kaggle adalah Macro F1.
+
+\section{Ringkasan Bonus}
+\begin{table}[H]
+\centering
+\caption{Bonus yang dikerjakan}
+\label{tab:bonus}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.2cm}X}
+\toprule
+Bonus & Keterangan \\
+\midrule
+Kaggle & Peringkat 1 public leaderboard dengan KNN from scratch, reproducible melalui \texttt{src/main.ipynb} \\
+DTL: gambar percabangan & \texttt{plot\_tree(model, top\_n)}, Gambar~\ref{fig:dtl_tree}, berkas \texttt{output/figures/dtl\_tree\_top3.png} \\
+LR: video kontur log-loss & \texttt{output/figures/lr\_*\_contour.mp4}, Gambar~\ref{fig:lr_contour} \\
+SVM: gambar bidang pemisah & \todo{Akram: berkas gambar tiap kernel} \\
+Naive Bayes: graf fitur & \todo{Argha} \\
+Algoritma optimasi DTL & Cost-complexity pruning \cite{ref:breiman}, Tabel~\ref{tab:dtl_ccp} \\
+Algoritma optimasi LR & FISTA dengan adaptive restart \cite{ref:fista}, Kode~\ref{lst:fista} \\
+Algoritma optimasi SVM & Particle Swarm Optimization untuk $C$ dan $\gamma$ \cite{ref:pso,ref:pso_shi} \\
+Cost-sensitive classification & Tabel~\ref{tab:cost} \\
+\bottomrule
+\end{tabularx}
+\end{table}

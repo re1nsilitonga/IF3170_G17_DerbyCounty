@@ -1,0 +1,89 @@
+\chapter{Dasar Teori}
+
+\section{Supervised Learning dan Klasifikasi Biner}
+Supervised learning adalah pembelajaran mesin yang memakai data berlabel $D=\{(x_i,y_i)\}_{i=1}^{n}$ untuk mempelajari fungsi $h:X\rightarrow Y$ yang dapat memprediksi label data baru \cite{ref:intro}. Pada tugas ini $Y=\{0,1\}$, dengan $y=1$ berarti pemesanan dibatalkan (\texttt{is\_canceled}), sehingga persoalannya adalah klasifikasi biner. Semua model menghasilkan skor atau probabilitas $\hat{p}(x)=P(y=1\mid x)$, lalu label akhir diperoleh dengan ambang (threshold) $t$:
+\begin{equation}
+  \hat{y} = \mathbf{1}\left[\hat{p}(x) \geq t\right].
+\end{equation}
+
+\section{Tahapan Pengolahan Data}
+Alur kerja mengikuti CRISP-DM \cite{ref:crispdm}: pemahaman bisnis, pemahaman data, persiapan data, pemodelan, evaluasi, dan deployment. Tahap persiapan data \cite{ref:dataprep} mencakup:
+\begin{itemize}
+  \item \textbf{Data cleaning}: menangani missing value, duplikat, outlier, dan nilai tidak valid.
+  \item \textbf{Data transformation}: encoding kategori (misalnya one-hot), normalisasi atau standardisasi, serta penanganan data tidak seimbang.
+  \item \textbf{Feature selection} dan \textbf{feature construction}: memilih fitur relevan dan membuat fitur turunan.
+  \item \textbf{Dimensionality reduction}: memproyeksikan data ke dimensi lebih rendah bila jumlah fitur besar.
+\end{itemize}
+Seluruh statistik transformasi (batas clipping, median, modus, rata-rata, IQR, daftar kategori) harus dipelajari dari data latih saja, lalu diterapkan ke data validasi dan uji. Jika data validasi ikut dipakai saat fit, terjadi \emph{data leakage} dan skor validasi menjadi terlalu optimis.
+
+\section{K-Nearest Neighbors (KNN)}
+KNN adalah lazy learner \cite{ref:knn,ref:cunningham}. Tahap pelatihan hanya menyimpan data latih. Untuk query $q$, algoritma menghitung jarak ke seluruh data latih, mengambil $k$ tetangga terdekat $N_k(q)$, lalu melakukan voting. Jarak yang umum dipakai adalah jarak Minkowski orde $p$:
+\begin{equation}
+  d_p(q,x) = \Big(\sum_{j=1}^{m} |q_j - x_j|^{p}\Big)^{1/p},
+\end{equation}
+dengan $p=1$ sebagai jarak Manhattan dan $p=2$ sebagai jarak Euclidean. Probabilitas kelas 1 dengan voting seragam dan voting terbobot jarak berturut-turut adalah
+\begin{equation}
+  \hat{p}_{\text{uniform}}(q) = \frac{1}{k}\sum_{i\in N_k(q)} y_i, \qquad
+  \hat{p}_{\text{weighted}}(q) = \frac{\sum_{i\in N_k(q)} w_i y_i}{\sum_{i\in N_k(q)} w_i}, \qquad w_i = \frac{1}{d(q,x_i)^2 + \epsilon}.
+\end{equation}
+Karena semua fitur berkontribusi pada jarak, KNN sangat sensitif terhadap skala fitur dan fitur yang tidak relevan. Pembobotan fitur, yaitu mengalikan kolom ke-$j$ dengan $w_j$ sebelum menghitung jarak, mengatur kontribusi tiap fitur \cite{ref:wettschereck}. Nilai $k$ kecil membuat model peka terhadap noise (variansi tinggi), sedangkan $k$ besar membuat prediksi condong ke kelas mayoritas (bias tinggi).
+
+\section{Decision Tree Learning (DTL)}
+Decision tree membagi ruang fitur secara rekursif berdasarkan atribut yang paling mengurangi ketidakmurnian (impurity) label \cite{ref:dtl03,ref:dtl04}. Untuk proporsi kelas positif $p$ pada suatu node:
+\begin{align}
+  \text{Entropy}(S) &= -p\log_2 p - (1-p)\log_2(1-p), \\
+  \text{Gini}(S) &= 1 - p^2 - (1-p)^2 = 2p(1-p).
+\end{align}
+Information gain dari pemisahan $S$ menjadi $S_L$ dan $S_R$ adalah
+\begin{equation}
+  \text{Gain}(S) = I(S) - \frac{|S_L|}{|S|} I(S_L) - \frac{|S_R|}{|S|} I(S_R).
+\end{equation}
+Tiga varian algoritma yang dibahas di kuliah:
+\begin{itemize}
+  \item \textbf{ID3}: memakai entropi dan information gain, dengan cabang sebanyak nilai atribut kategorikal.
+  \item \textbf{C4.5}: memakai gain ratio, mendukung atribut kontinu melalui threshold, menangani missing value, dan melakukan post-pruning \cite{ref:quinlan}. Gain ratio menormalkan gain dengan split information:
+  \begin{equation}
+    \text{GainRatio}(S) = \frac{\text{Gain}(S)}{\text{SplitInfo}(S)}, \qquad
+    \text{SplitInfo}(S) = -\sum_{v\in\{L,R\}} \frac{|S_v|}{|S|}\log_2\frac{|S_v|}{|S|}.
+  \end{equation}
+  \item \textbf{CART}: pohon biner dengan Gini, atribut kontinu dipotong di titik tengah dua nilai berurutan, dan dapat dipangkas dengan cost-complexity pruning \cite{ref:breiman}.
+\end{itemize}
+Atribut kontinu ditangani dengan mengurutkan nilai lalu mencoba setiap titik potong di antara dua nilai berbeda \cite{ref:dtlcont}. Missing value dapat ditangani dengan mengarahkan baris kosong ke cabang yang paling menguntungkan \cite{ref:dtlmiss}. Overfitting dicegah dengan pre-pruning (batas kedalaman, jumlah minimum sampel per daun, minimum gain) atau post-pruning \cite{ref:dtloverfit}.
+
+\section{Logistic Regression}
+Logistic regression memodelkan probabilitas kelas positif dengan fungsi sigmoid dari kombinasi linear fitur \cite{ref:lrwhat}:
+\begin{equation}
+  \hat{p}(x) = \sigma(\theta^\top x + b), \qquad \sigma(z) = \frac{1}{1+e^{-z}}.
+\end{equation}
+Parameter dipelajari dengan meminimalkan log-loss ditambah suku regularisasi $R(\theta)$:
+\begin{equation}
+  J(\theta) = -\frac{1}{n}\sum_{i=1}^{n}\left[y_i\log\hat{p}_i + (1-y_i)\log(1-\hat{p}_i)\right] + \lambda R(\theta).
+\end{equation}
+Gradien log-loss adalah $\nabla_\theta = \frac{1}{n}X^\top(\hat{p}-y)$, sehingga parameter dapat diperbarui dengan gradient descent \cite{ref:lrsga}. Tiga bentuk regularisasi yang diminta spesifikasi adalah L1 ($R=\lVert\theta\rVert_1$, mendorong sebagian bobot menjadi tepat nol), L2 ($R=\frac{1}{2}\lVert\theta\rVert_2^2$, mengecilkan bobot secara halus), dan Elastic Net ($R=\alpha\lVert\theta\rVert_1 + \frac{1-\alpha}{2}\lVert\theta\rVert_2^2$).
+
+\section{Support Vector Machine (SVM)}
+SVM mencari hyperplane $w^\top x + b = 0$ dengan margin terbesar antara dua kelas \cite{ref:svmwhat,ref:svmsep}. Dengan label $y_i\in\{-1,+1\}$, formulasi soft margin untuk data yang tidak terpisah linear \cite{ref:svmnonsep} adalah
+\begin{equation}
+  \min_{w,b,\xi}\ \frac{1}{2}\lVert w\rVert^2 + C\sum_i \xi_i \quad \text{s.t.}\quad y_i(w^\top x_i + b)\ge 1-\xi_i,\ \xi_i\ge 0.
+\end{equation}
+Bentuk dual-nya hanya bergantung pada hasil kali dalam antardata, sehingga dapat diganti dengan fungsi kernel $K(x_i,x_j)$:
+\begin{equation}
+  \min_\alpha\ \frac{1}{2}\sum_{i,j}\alpha_i\alpha_j y_i y_j K(x_i,x_j) - \sum_i\alpha_i \quad \text{s.t.}\quad 0\le\alpha_i\le C,\ \sum_i\alpha_i y_i = 0.
+\end{equation}
+Kernel yang diimplementasikan adalah linear $K(x,z)=x^\top z$, polynomial $K(x,z)=(\gamma x^\top z + r)^d$, dan Gaussian $K(x,z)=\exp(-\gamma\lVert x-z\rVert^2)$. Untuk $n$ besar, masalah dual diselesaikan dengan dekomposisi working set \cite{ref:platt_smo,ref:fan}. Probabilitas diperoleh dengan Platt scaling \cite{ref:platt_prob}.
+
+\section{Naive Bayes}
+Naive Bayes menerapkan teorema Bayes dengan asumsi setiap fitur saling independen bersyarat terhadap kelas \cite{ref:bayesnet}. Asumsi ini setara dengan Bayesian network berbentuk bintang dengan kelas sebagai satu-satunya induk semua fitur:
+\begin{equation}
+  P(y\mid x) \propto P(y)\prod_{j=1}^{m} P(x_j\mid y).
+\end{equation}
+Untuk fitur kategorikal, peluang bersyarat diestimasi dengan Laplace smoothing $P(x_j=v\mid y=c)=\frac{N_{j,v,c}+\alpha}{N_c+\alpha V_j}$, dan perhitungan dilakukan dalam ruang logaritma agar tidak terjadi underflow.
+
+\section{Evaluasi Model}
+Untuk klasifikasi biner, confusion matrix terdiri atas TN, FP, FN, dan TP. Untuk tiap kelas $c$:
+\begin{equation}
+  \text{Precision}_c = \frac{TP_c}{TP_c+FP_c},\qquad \text{Recall}_c = \frac{TP_c}{TP_c+FN_c},\qquad F1_c = \frac{2\,TP_c}{2\,TP_c+FP_c+FN_c}.
+\end{equation}
+Metrik kompetisi adalah \textbf{Macro F1}, yaitu rata-rata $F1$ kelas 0 dan kelas 1. Metrik ini memberi bobot sama pada kedua kelas, sehingga lebih tepat daripada akurasi untuk data yang tidak seimbang.
+
+Stratified $k$-fold cross validation membagi data menjadi $k$ bagian dengan proporsi kelas yang sama. Gabungan prediksi pada data validasi tiap fold disebut prediksi \textbf{out-of-fold (OOF)}. Setiap baris latih memperoleh tepat satu prediksi dari model yang tidak pernah melihat baris tersebut, sehingga OOF dapat dipakai untuk memilih hyperparameter dan threshold tanpa menyentuh data uji.

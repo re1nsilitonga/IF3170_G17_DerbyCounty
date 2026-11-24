@@ -1,0 +1,19 @@
+\chapter{Kesimpulan dan Saran}
+
+\section{Kesimpulan}
+\begin{enumerate}
+  \item KNN, Decision Tree (C4.5 dengan dukungan data numerik, kategorikal, dan missing value), Logistic Regression (L1, L2, dan Elastic Net), SVM (kernel linear, polynomial, dan Gaussian), serta Categorical Naive Bayes berhasil diimplementasikan from scratch. Hasilnya setara dengan scikit-learn pada data dan preprocessing yang sama.
+  \item Model terbaik adalah KNN from scratch dengan preprocessing bersama dan vote booking kembar, dengan Macro F1 OOF 0,8529 dan holdout 0,8592. Model ini mencapai peringkat 1 public leaderboard dan direproduksi secara identik oleh \texttt{src/main.ipynb}.
+  \item Decision Tree terbaik memakai gain ratio (C4.5) dengan pre-pruning minimum gain (OOF 0,8343, public 0,84679). Cost-complexity pruning dapat memangkas pohon sekitar 22\% tanpa menurunkan skor.
+  \item Pada dataset ini, representasi fitur dan pemahaman cara data dibuat lebih menentukan daripada pilihan algoritma. Analisis noise pada lead time menghasilkan vote booking kembar, yang memberi kenaikan terbesar pada model final.
+  \item Pemilihan threshold dari prediksi OOF efektif menangani ketidakseimbangan kelas 2:1 tanpa resampling. Jika biaya FP dua kali FN, threshold optimal naik ke sekitar 0,67 sampai 0,74 dan biaya turun 14\%.
+  \item Setiap perubahan konfigurasi perlu dicek pada beberapa seed fold. Beberapa kenaikan yang terlihat pada satu pembagian fold ternyata tidak konsisten pada seed lain.
+\end{enumerate}
+
+\section{Saran}
+\begin{enumerate}
+  \item Menerapkan seleksi dan pembobotan fitur yang terbukti membantu KNN pada SVM, karena SVM masih memakai seluruh kolom tanpa seleksi.
+  \item Memakai ide booking kembar pada model lain, misalnya sebagai fitur tambahan untuk Decision Tree atau Logistic Regression.
+  \item Mengurangi asumsi independensi pada Naive Bayes, misalnya dengan menggabungkan fitur yang saling berkorelasi atau memakai struktur Bayesian network yang lebih kaya.
+  \item Mempercepat KNN from scratch untuk data lebih besar dengan struktur indeks (misalnya KD-tree) atau perhitungan jarak di GPU.
+\end{enumerate}
