@@ -31,6 +31,8 @@ output/
 
 Semua kode from scratch (preprocessing, model, validasi) ditulis langsung di dalam notebook. Format notebook mengikuti template tugas.
 
+Hasil SVM final dan cara menjalankannya dijelaskan di [`src/experiments/svm/README.md`](src/experiments/svm/README.md). CSV final berada di `output/submissions/submission_svm_final.csv`, dengan public score Kaggle **0.85189**.
+
 ## Notebook Final (`src/main.ipynb`)
 
 - **Model final: KNN from scratch + vote booking kembar** (k = 17, Minkowski p = 1.5, bobot 1/d², threshold 0.4845). Menghasilkan `output/submissions/submission_knn_twin_final.csv`.
