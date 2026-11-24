@@ -31,24 +31,14 @@ output/
 
 Semua kode from scratch (preprocessing, model, validasi) ditulis langsung di dalam notebook. Format notebook mengikuti template tugas.
 
+Hasil SVM final dan cara menjalankannya dijelaskan di [`src/experiments/svm/README.md`](src/experiments/svm/README.md). CSV final berada di `output/submissions/submission_svm_final.csv`, dengan public score Kaggle **0.85189**.
+
 ## Notebook Final (`src/main.ipynb`)
 
 - **Model final: KNN from scratch + vote booking kembar** (k = 17, Minkowski p = 1.5, bobot 1/d², threshold 0.4845). Menghasilkan `output/submissions/submission_knn_twin_final.csv`.
 - **DTL: C4.5 (gain ratio)** dari eksperimen `src/experiments/dtl/dtl_gain_ratio.ipynb`. Menangani data numerik, kategorikal, dan missing secara langsung. Menghasilkan `output/submissions/submission_dtl_gain_ratio.csv`.
 - Preprocessing bersama dibuat dengan fungsi `prepare(fit_df, *dfs)`. Model lain cukup memakai `X_train`, `X_val`, dan `X_test` dari bagian Preparation Pipeline.
 - Bonus yang sudah ada: gambar percabangan DTL dengan parameter `top_n`, cost-complexity pruning pada DTL (algoritma optimasi di luar materi, dengan referensi), dan cost-sensitive classification (biaya FP 2 kali FN).
-
-## Eksperimen DTL (`src/experiments/dtl/`)
-
-Lima notebook yang menunjukkan perkembangan Decision Tree dari baseline sampai public tertinggi:
-
-| Notebook | Perubahan dari sebelumnya | Public |
-| --- | --- | --- |
-| `dtl_baseline_no_fe` | CART gini, depth 12, leaf 10, tanpa fitur turunan | - |
-| `dtl_baseline_fe` | ditambah 7 fitur turunan | 0.83740 |
-| `dtl_gini_mingain` | pre-pruning minimum gain | 0.84473 |
-| `dtl_entropy_mingain` | criterion entropy (information gain) | - |
-| `dtl_gain_ratio` | criterion gain ratio (C4.5) | 0.84679 |
 
 ## Setup
 
