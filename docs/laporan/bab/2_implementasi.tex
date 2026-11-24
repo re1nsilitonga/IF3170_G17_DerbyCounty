@@ -102,7 +102,7 @@ Seluruh kode from scratch (preprocessing, model, dan validasi) ditulis langsung 
   \item \texttt{src/experiments/<model>/}: notebook eksperimen tiap model (\texttt{knn}, \texttt{dtl}, \texttt{lr}, \texttt{svm}, \texttt{nb}). Satu notebook untuk satu eksperimen.
   \item \texttt{output/submissions/}: berkas submission; \texttt{output/models/}: model tersimpan (\texttt{.pkl}); \texttt{output/figures/}: gambar dan video untuk bonus.
 \end{itemize}
-Setiap model mengikuti antarmuka yang sama: \texttt{fit(X, y)}, \texttt{predict\_proba(X)} yang mengembalikan probabilitas kelas 1, dan \texttt{predict(X, threshold)}. Setiap notebook mencetak md5 berkas submission di akhir untuk membuktikan bahwa hasilnya reproducible.
+Setiap model mengikuti antarmuka yang sama: \texttt{fit(X, y)}, \texttt{predict\_proba(X)} yang mengembalikan probabilitas kelas 1, dan \texttt{predict(X, threshold)}. Notebook mencetak checksum berkas submission untuk memeriksa reproduksibilitas. Eksperimen Naive Bayes memakai SHA-256.
 
 \section{Data Cleaning dan Preprocessing}
 
@@ -174,7 +174,7 @@ Model & Transformasi & Alasan \\
 DTL & Dedupe, \texttt{num\_adults = 0} jadi missing, 7 fitur turunan, kategori langka ($<20$ baris) menjadi \texttt{Other}. NaN dan kategori teks dibiarkan, tanpa scaling & Pohon menangani missing dan kategori langsung. Split berbasis urutan nilai sehingga tidak terpengaruh skala \\
 LR & Indikator missing, imputasi median, \texttt{log1p}, encoding siklik, one-hot, binning berbasis target, interaksi fitur & Model linear butuh representasi yang menangkap hubungan tidak linear dan interaksi \\
 SVM & Imputasi, one-hot, standardisasi, ditambah fitur turunan & Kernel dihitung dari hasil kali dalam atau jarak sehingga sensitif terhadap skala \\
-NB & Setiap fitur menjadi kode kategori; lead time dikelompokkan ke $\le30$, 30 sampai 90, dan $>90$ hari; tarif ke $\le1$ juta, 1 sampai 2 juta, dan $>2$ juta. Nilai kosong menjadi kategori sendiri & Categorical Naive Bayes membutuhkan nilai diskrit \\
+NB & Baseline mengodekan kategori dengan bin tetap pada lead time dan tarif. Varian kontekstual mempelajari bin per kelompok dan menggabungkan kategori. Nilai kosong mendapat kode tersendiri & Peluang Categorical Naive Bayes dihitung dari frekuensi kode diskret \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -345,7 +345,7 @@ Kelas \texttt{SVM} menyelesaikan bentuk dual untuk kernel linear, polynomial, da
 dengan fitness berupa Macro F1 OOF. \todo{Akram: lengkapi detail implementasi dan hasil PSO dari notebook \texttt{svm.ipynb} terbaru.}
 
 \section{Naive Bayes}
-Kelas \texttt{NaiveBayes} mengimplementasikan Categorical Naive Bayes dengan Laplace smoothing ($\alpha=1$) pada kode kategori. Prior dan likelihood disimpan dalam bentuk logaritma, lalu probabilitas dinormalisasi dengan log-sum-exp agar stabil. Dua eksperimen dijalankan: dua fitur (\texttt{booking\_channel} dan \texttt{special\_requests}) dan semua 17 fitur asli.
+\input{bab/nb/implementasi}
 
 \section{Pembanding scikit-learn}
 Setiap model from scratch dibandingkan dengan scikit-learn \cite{ref:sklearn} memakai data, preprocessing, dan aturan threshold yang sama.
@@ -360,5 +360,5 @@ Setiap model from scratch dibandingkan dengan scikit-learn \cite{ref:sklearn} me
   Karena scikit-learn tidak menerima teks dan NaN, kategori di-one-hot dan missing diisi median.
   \item \textbf{LR}: \texttt{LogisticRegression} (lbfgs untuk L2, saga untuk L1) pada matriks fitur yang sama.
   \item \textbf{SVM}: \texttt{SVC} dengan kernel dan parameter yang sama. Probabilitasnya dikalibrasi dengan \texttt{CalibratedClassifier\-CV}.
-  \item \textbf{Naive Bayes}: \texttt{CategoricalNB(alpha=1)} pada kode kategori yang sama.
+  \item \textbf{Naive Bayes}: \texttt{CategoricalNB} pada kode kategori, fold, dan alpha yang sama. Untuk varian berbobot, tabel likelihood pembanding diberi bobot yang sama.
 \end{itemize}

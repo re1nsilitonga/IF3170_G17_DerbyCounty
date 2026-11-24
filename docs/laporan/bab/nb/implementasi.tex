@@ -1,0 +1,48 @@
+Empat tahap eksperimen memakai notebook mandiri di \texttt{src/experiments/nb/} pada branch \texttt{main}. Setiap tahap mengimplementasikan \texttt{fit(X, y)}, \texttt{predict\_proba(X)}, dan \texttt{predict(X, threshold)} dengan NumPy. \texttt{fit} menyimpan log-prior kelas dan satu tabel log-likelihood untuk setiap kolom. \texttt{predict\_proba} mengambil nilai dari tabel sesuai kode kategori pada baris tersebut, lalu menormalkan skor kelas. Kode~\ref{lst:nb_count} menunjukkan inti perhitungan varian kontekstual.
+
+\noindent\begin{minipage}{\textwidth}
+\begin{lstlisting}[caption={Penghitungan log-likelihood dan skor Naive Bayes (cuplikan)},label={lst:nb_count}]
+def categorical_counts(codes, y):
+    n_categories = max(2, int(codes.max()) + 1)
+    indices = y * n_categories + codes.astype(np.intp, copy=False)
+    counts = np.bincount(indices, minlength=2 * n_categories)
+    return counts.reshape(2, n_categories)
+
+def categorical_log_likelihoods(counts, class_counts, alpha):
+    alpha = np.asarray(alpha)[..., None, None]
+    return np.log((counts + alpha) /
+                  (class_counts[:, None] + alpha * counts.shape[1]))
+
+# Di dalam predict_proba, setelah validasi masukan.
+log_scores = np.empty((len(X), 2))
+for label in (0, 1):
+    log_scores[:, label] = self.log_prior_[label]
+    for column, table in enumerate(self.log_likelihoods_):
+        log_scores[:, label] += table[label, X[:, column]]
+weights = np.exp(log_scores - log_scores.max(axis=1, keepdims=True))
+return weights[:, 1] / weights.sum(axis=1)
+\end{lstlisting}
+\end{minipage}
+
+\subsection{Baseline dan tuning dengan preprocessing tetap}
+Dataset memuat 27.373 baris latih, 6.844 baris uji, dan 17 fitur pemesanan. \texttt{clean\_train} membuang 64 duplikat persis berdasarkan fitur dan target, tanpa menggunakan ID untuk mengidentifikasi duplikat. Preprocessor mengeluarkan kolom ID dan target dari masukan model dan mengubah \texttt{num\_adults = 0} menjadi nilai kosong. \texttt{NBPreprocessor} memakai \texttt{pd.cut} untuk membentuk tiga rentang \emph{lead time} (batas 30 dan 90 hari) serta tiga rentang tarif (batas Rp1 juta dan Rp2 juta). Nilai diskret lain langsung menjadi kategori. Kanal, tipe kamar, dan paket makan yang muncul kurang dari 20 kali pada data fit masuk \texttt{Other}. Kode 0 dicadangkan untuk kategori baru atau langka dan kode 1 untuk kategori kosong. Kamus dipelajari dari bagian latih setiap fold.
+
+\begin{enumerate}
+  \item \textbf{Baseline (\texttt{nb\_baseline}).} Seluruh 17 fitur dipakai, dengan \(\alpha=1\), bobot seragam, dan pilihan threshold dari prediksi OOF.
+  \item \textbf{Fine-tuning (\texttt{nb\_baseline\_finetune}).} Preprocessing sama. Pencarian menguji 12 nilai alpha dan masing-masing enam bobot untuk \emph{lead time} dan jumlah permintaan khusus, sehingga ada 432 kombinasi sebelum pemilihan threshold. Bobot bekerja pada log-likelihood dan dipilih dengan Macro F1 OOF, mengikuti gagasan pembobotan atribut \cite{ref:zaidi_nb}. Konfigurasi terpilih memakai \(\alpha=2\), bobot 1 untuk \emph{lead time}, dan bobot 2 untuk \texttt{special\_requests}.
+  \item \textbf{Smoothing per fitur (\texttt{nb\_baseline\_finetune\_2}).} Preprocessing, bobot, threshold 0,49, dan fold sama dengan tahap kedua. Hanya \(\alpha_{\text{permintaan}}\) yang diubah dari 2 ke 10. Uji ini mengukur dampak smoothing yang lebih kuat pada tabel kategori fitur yang mendapat bobot 2.
+\end{enumerate}
+
+\subsection{Diskretisasi kontekstual dan seleksi fitur}
+Pada \texttt{nb\_baseline\_finetune\_3}, \texttt{NBFeaturePreprocessor} membentuk kategori dari rentang numerik dan kombinasi fitur. Tanggal pemesanan dihitung dari tanggal kedatangan dikurangi \emph{lead time}. Diskretisasi terawasi \emph{Minimum Description Length} (MDL) memilih batas dengan penurunan entropi kelas terbesar di antara kandidat yang memiliki minimal 20 sampel di tiap sisi. Pemisahan diterima jika penurunan entropi melampaui penalti MDL, lalu proses diulang pada kedua sisi \cite{ref:fayyad_nb}. Untuk \emph{lead time}, konteks terbaik adalah kanal pemesanan. Untuk tarif, konteks terbaik adalah kanal dan jumlah permintaan khusus. Batas lokal dipelajari jika tersedia minimal 200 nilai valid dalam kelompok latih. Konteks lain memakai batas global. Jumlah permintaan di atas tiga dipetakan ke kelompok tiga saat menentukan konteks.
+
+Kategori gabungan dibentuk dari tuple kode fitur, misalnya kanal \(\times\) rentang \emph{lead time} \(\times\) rentang tarif \(\times\) jumlah permintaan \cite{ref:pazzani_nb}. Model menghitung satu likelihood untuk tuple itu. Dalam konfigurasi terpilih, kombinasi dengan frekuensi kurang dari tiga selama fit dipetakan ke kode 0. Jika semua komponen kosong, grup memakai kode 1. Model memilih tiga kategori gabungan: periode kedatangan dan pemesanan berukuran 14 hari, grup kanal--\emph{lead time}--tarif--permintaan, serta paket makan dan tipe kamar. Enam fitur tunggal yang dipertahankan adalah status tamu lama, kebutuhan parkir, jumlah anak, riwayat pembatalan, riwayat pemesanan selesai, dan jumlah malam akhir pekan.
+
+\texttt{search} menjalankan seleksi \emph{wrapper} \cite{ref:kohavi_nb}. Kandidat dibentuk dari skema bin, susunan grup, frekuensi minimum, dan alpha. Setiap putaran memeriksa tetangga dari delapan struktur dengan Macro F1 OOF tertinggi. Proses berhenti jika daftar itu stabil atau setelah empat putaran. Batas bin dan tabel frekuensi dipelajari pada fold latih. Hitungan kategori digunakan ulang saat menilai beberapa nilai alpha. Langkah threshold adalah 0,005. Dari 14.900 kandidat ekspor, pencarian memilih satu model dengan sembilan masukan dan \(\alpha=0{,}1\).
+
+\subsection{Validasi, pembanding, dan penyimpanan}
+Tiga tahap awal memakai \emph{stratified} 5-fold dengan seed 42 pada 27.309 baris hasil deduplikasi. OOF berasal dari gabungan prediksi pada lima fold validasi. Tahap kontekstual dilaporkan pula menurut protokol tersebut agar bisa dibandingkan dengan tiga tahap awal. Validasi bertingkat menggunakan 27.373 baris mentah, menempatkan baris dengan fitur mentah identik dalam fold yang sama, dan melakukan deduplikasi pada bagian fit. Pemilihan konfigurasi serta threshold dilakukan di lima fold dalam. Lima fold luar mengukur prosedur seleksi pada data yang belum dipakai memilih konfigurasi.
+
+Pada setiap eksperimen, \texttt{CategoricalNB} dilatih pada kode kategori dan fold yang sama. Pada fine-tuning, tabel likelihood dari scikit-learn diberi bobot yang sama dengan model from scratch. Pada smoothing per fitur, likelihood \texttt{special\_requests} diambil dari estimator pembanding dengan \(\alpha=10\), sedangkan tabel fitur lain memakai \(\alpha=2\). Kedua estimator ini hanya digunakan untuk memeriksa hitungan. Model yang diekspor adalah satu Categorical Naive Bayes from scratch.
+
+Setelah konfigurasi dipilih, preprocessor dan model di-fit ulang pada data latih hasil deduplikasi. Keduanya disimpan bersama threshold dalam berkas \texttt{pickle}, lalu dimuat kembali untuk menghasilkan kolom \texttt{id} dan \texttt{is\_canceled}. Notebook memeriksa 6.844 baris dan urutan ID terhadap \texttt{sample\_submission.csv} serta mencetak SHA-256 CSV. Data uji hanya ditransformasi dengan preprocessor hasil fit untuk membuat prediksi akhir.

@@ -9,3 +9,4 @@
 *.fdb_latexmk
 *.synctex.gz
 main.pdf
+naive_bayes.pdf

@@ -67,6 +67,10 @@
 
 \begin{document}
 
+\ifdefined\NaiveBayesOnly
+\input{bab/nb/ringkas}
+\else
+
 % ---------------------------------------------------------------- sampul
 \begin{titlepage}
   \centering
@@ -111,5 +115,7 @@
 
 \appendix
 \input{bab/7_lampiran}
+
+\fi
 
 \end{document}

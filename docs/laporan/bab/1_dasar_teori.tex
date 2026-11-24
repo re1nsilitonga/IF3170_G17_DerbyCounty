@@ -73,11 +73,7 @@ Bentuk dual-nya hanya bergantung pada hasil kali dalam antardata, sehingga dapat
 Kernel yang diimplementasikan adalah linear $K(x,z)=x^\top z$, polynomial $K(x,z)=(\gamma x^\top z + r)^d$, dan Gaussian $K(x,z)=\exp(-\gamma\lVert x-z\rVert^2)$. Untuk $n$ besar, masalah dual diselesaikan dengan dekomposisi working set \cite{ref:platt_smo,ref:fan}. Probabilitas diperoleh dengan Platt scaling \cite{ref:platt_prob}.
 
 \section{Naive Bayes}
-Naive Bayes menerapkan teorema Bayes dengan asumsi setiap fitur saling independen bersyarat terhadap kelas \cite{ref:bayesnet}. Asumsi ini setara dengan Bayesian network berbentuk bintang dengan kelas sebagai satu-satunya induk semua fitur:
-\begin{equation}
-  P(y\mid x) \propto P(y)\prod_{j=1}^{m} P(x_j\mid y).
-\end{equation}
-Untuk fitur kategorikal, peluang bersyarat diestimasi dengan Laplace smoothing $P(x_j=v\mid y=c)=\frac{N_{j,v,c}+\alpha}{N_c+\alpha V_j}$, dan perhitungan dilakukan dalam ruang logaritma agar tidak terjadi underflow.
+\input{bab/nb/teori}
 
 \section{Evaluasi Model}
 Untuk klasifikasi biner, confusion matrix terdiri atas TN, FP, FN, dan TP. Untuk tiap kelas $c$:

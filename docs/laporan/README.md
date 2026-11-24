@@ -5,6 +5,7 @@ Source laporan Tugas Besar 2. Hasil build disalin ke `docs/laporan.pdf`.
 ```
 docs/laporan/
 ├── main.tex            # preamble, sampul, daftar isi, urutan bab
+├── naive_bayes.tex     # PDF khusus bagian Naive Bayes
 ├── bab/                # isi tiap bab (edit di sini)
 │   ├── 1_dasar_teori.tex
 │   ├── 2_implementasi.tex
@@ -45,6 +46,10 @@ Hanya memakai paket LaTeX standar (tanpa `babel`, `minted`, atau `shell-escape`)
 **Overleaf**: upload isi folder `docs/laporan/` (termasuk `gambar/` dan `bab/`), set compiler ke pdfLaTeX, main document `main.tex`.
 
 **Manual** (semua OS): jalankan `pdflatex main.tex` tiga kali di folder ini, lalu salin `main.pdf` ke `docs/laporan.pdf`.
+
+## Build bagian Naive Bayes
+
+Dari folder `docs/laporan/`, jalankan `latexmk -pdf naive_bayes.tex` atau `pdflatex naive_bayes.tex` tiga kali. Hasilnya `naive_bayes.pdf`. Versi ini memakai isi LaTeX yang sama dari `bab/nb/` dengan laporan lengkap.
 
 ## Menulis
 

@@ -1,0 +1,11 @@
+Categorical Naive Bayes memperkirakan peluang pembatalan dari kode kategori setiap fitur. Target \(Y\) bernilai 1 untuk pemesanan yang batal dan 0 untuk pemesanan yang tidak batal. Model mengasumsikan bahwa fitur \(X_1,\ldots,X_m\) saling independen setelah kelas diketahui \cite{ref:bayesnet}. Dengan asumsi tersebut, posterior sebanding dengan prior kelas dikalikan peluang setiap kategori pada kelas itu:
+\begin{equation}
+  P(Y=c\mid x) \propto P(Y=c)\prod_{j=1}^{m} P(X_j=x_j\mid Y=c).
+\end{equation}
+Prior \(P(Y=c)\) diestimasi dari proporsi kelas pada data latih. Peluang kategori diestimasi dengan \emph{additive smoothing} \cite{ref:categoricalnb}:
+\begin{equation}
+  P(X_j=v\mid Y=c)=\frac{N_{j,v,c}+\alpha_j}{N_c+\alpha_j K_j}.
+\end{equation}
+\(N_{j,v,c}\) adalah jumlah baris kelas \(c\) dengan kategori \(v\) pada fitur \(j\), \(N_c\) adalah jumlah baris kelas tersebut, dan \(K_j\) adalah jumlah kode kategori yang dicakup tabel fitur. Smoothing mencegah peluang nol untuk kategori yang tidak muncul pada kelas tertentu. Laplace smoothing adalah kasus \(\alpha_j=1\).
+
+Untuk menghindari \emph{underflow}, perkalian diubah menjadi penjumlahan logaritma. Eksperimen berbobot memakai \(s_c=\log P(Y=c)+\sum_j w_j\log P(X_j=x_j\mid Y=c)\). Bobot \(w_j>1\) memperkuat kontribusi fitur tersebut terhadap perbandingan skor kelas \cite{ref:zaidi_nb}. Model menormalkan kedua skor setelah mengurangi nilai maksimum dan memprediksi kelas 1 ketika hasil normalisasi untuk kelas 1 mencapai threshold. Pada baseline dan model kontekstual, semua bobot bernilai 1.

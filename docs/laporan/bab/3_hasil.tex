@@ -17,7 +17,7 @@ KNN & Sama, tanpa vote booking kembar & 0,8476 & -- \\
 DTL & Gain ratio (C4.5), depth 30, leaf 5, min gain $2\times10^{-4}$ & 0,8343 & 0,84679 \\
 LR & L2, bin berbasis target, interaksi, sel dua dimensi (\texttt{lr\_cross\_bins}) & 0,8344 & 0,83542 \\
 SVM & Polynomial, $C=1$, $d=3$ & 0,7943 & \todo{} \\
-NB & Categorical, 17 fitur asli, $\alpha=1$ & 0,7342 & 0,73697 \\
+NB & Categorical kontekstual, sembilan masukan, $\alpha=0{,}1$ & 0,8020 & 0,80173 \\
 \bottomrule
 \end{tabularx}
 
@@ -326,28 +326,11 @@ Gaussian, $C=1$ & From scratch & 0,43 & 0,7907 & 0,0036 \\
 \paragraph{Analisis SVM.} Untuk kernel linear, selisih Macro F1 dengan scikit-learn hanya sekitar 0,0003. Kernel polynomial dan Gaussian unggul sekitar 0,03 atas kernel linear, menandakan batas keputusan tidak linear terhadap fitur. Jumlah support vector yang besar menandakan kelas sangat tumpang tindih di ruang fitur ini. \todo{Akram: analisis PSO dan gambar bidang pemisah tiap kernel.}
 
 \section{Hasil Naive Bayes}
-
-\begin{table}[H]
-\centering
-\caption{Naive Bayes: from scratch vs scikit-learn \texttt{CategoricalNB}}
-\label{tab:nb}
-\begin{tabular}{llrrrr}
-\toprule
-Fitur & Model & Threshold & Macro F1 OOF & Std & Selisih $\hat{p}$ maks. \\
-\midrule
-\multirow{2}{*}{2 fitur} & From scratch & 0,44 & 0,6652 & 0,0041 & \multirow{2}{*}{$6{,}1\times10^{-16}$} \\
- & scikit-learn & 0,44 & 0,6652 & 0,0041 & \\
-\multirow{2}{*}{17 fitur} & From scratch & 0,42 & 0,7342 & 0,0084 & \multirow{2}{*}{$6{,}0\times10^{-15}$} \\
- & scikit-learn & 0,42 & 0,7342 & 0,0084 & \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\paragraph{Analisis Naive Bayes.} Probabilitas from scratch identik dengan \texttt{CategoricalNB} hingga galat pembulatan. Naive Bayes adalah model terlemah karena asumsi independensi dilanggar oleh fitur yang saling berkorelasi (misalnya jumlah malam akhir pekan dan hari kerja, tahun dan bulan kedatangan, status tamu lama dan riwayat pemesanan). Bukti yang sama dihitung lebih dari sekali sehingga probabilitas terlalu ekstrem, terlihat dari FP yang tinggi (3.917 pada OOF). Pengelompokan lead time menjadi tiga rentang juga menghilangkan sebagian informasi dari prediktor terkuat. \todo{Argha: tambahkan gambar graf hubungan fitur dan kelas jika bonus Naive Bayes dikerjakan.}
+\input{bab/nb/hasil}
 
 \section{Analisis Perbandingan Antar-Model}
 \begin{enumerate}
-  \item \textbf{Peringkat.} KNN + kembar (0,8529) $>$ KNN (0,8476) $>$ DTL ($\approx$0,834) $\approx$ LR ($\approx$0,834) $>$ SVM kernel (0,79) $>$ NB (0,73). Urutan public leaderboard sejalan dengan urutan OOF.
+  \item \textbf{Peringkat OOF.} Pada konfigurasi Tabel~\ref{tab:ringkasan}, KNN + kembar memperoleh skor tertinggi (0,8529), diikuti KNN (0,8476), DTL dan LR ($\approx$0,834), NB kontekstual (0,8020), dan SVM polynomial (0,7943). Skor public terbaik Naive Bayes tercatat 0,80173 pada varian kontekstual.
   \item \textbf{Representasi fitur lebih menentukan daripada algoritma.} KNN naik dari 0,7632 ke 0,8476 dan LR dari 0,7595 ke 0,8344 hanya dengan mengubah representasi fitur. Decision Tree kuat tanpa banyak rekayasa fitur karena seleksi fitur sudah melekat pada pemilihan split.
   \item \textbf{Memahami cara data dibuat.} Kenaikan terbesar KNN final datang dari analisis noise: pemesanan kembar hampir selalu berlabel sama, dan noise ada pada lead time. Informasi ini dipakai langsung lewat vote kembar.
   \item \textbf{Threshold menggantikan resampling.} Semua threshold OOF berada di 0,40 sampai 0,53, sebagian besar di bawah 0,5. Karena kelas batal hanya 32,8\%, menurunkan threshold menyeimbangkan recall kelas minoritas dan menaikkan Macro F1 tanpa data sintetis.
@@ -394,10 +377,11 @@ Kaggle & Peringkat 1 public leaderboard dengan KNN from scratch, reproducible me
 DTL: gambar percabangan & \texttt{plot\_tree(model, top\_n)}, Gambar~\ref{fig:dtl_tree}, berkas \texttt{output/figures/dtl\_tree\_top3.png} \\
 LR: video kontur log-loss & \texttt{output/figures/lr\_*\_contour.mp4}, Gambar~\ref{fig:lr_contour} \\
 SVM: gambar bidang pemisah & \todo{Akram: berkas gambar tiap kernel} \\
-Naive Bayes: graf fitur & \todo{Argha} \\
+Naive Bayes: graf fitur & Graf untuk sembilan masukan kategori terpilih, Gambar~\ref{fig:nb_graf} \\
 Algoritma optimasi DTL & Cost-complexity pruning \cite{ref:breiman}, Tabel~\ref{tab:dtl_ccp} \\
 Algoritma optimasi LR & FISTA dengan adaptive restart \cite{ref:fista}, Kode~\ref{lst:fista} \\
 Algoritma optimasi SVM & Particle Swarm Optimization untuk $C$ dan $\gamma$ \cite{ref:pso,ref:pso_shi} \\
+Algoritma optimasi NB & Diskretisasi MDL, penggabungan kategori, dan seleksi wrapper \cite{ref:fayyad_nb,ref:pazzani_nb,ref:kohavi_nb}, Tabel~\ref{tab:nb_nested} \\
 Cost-sensitive classification & Tabel~\ref{tab:cost} \\
 \bottomrule
 \end{tabularx}

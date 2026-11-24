@@ -1,0 +1,34 @@
+\renewcommand{\thesection}{\arabic{section}}
+\renewcommand{\theequation}{\arabic{equation}}
+\renewcommand{\thefigure}{\arabic{figure}}
+\renewcommand{\thetable}{\arabic{table}}
+\renewcommand{\thelstlisting}{\arabic{lstlisting}}
+\begin{center}
+  {\large IF3170 Inteligensi Artifisial \enspace|\enspace Tugas Besar 2\par}
+  \vspace{0.6cm}
+  {\LARGE\bfseries Categorical Naive Bayes\par}
+  \vspace{0.2cm}
+  {\large Prediksi Pembatalan Pemesanan Penginapan\par}
+  \vspace{0.4cm}
+  Arghawisesa Dwinanda Arham (13524100)\\
+  Kelompok 17 -- DerbyCounty \enspace|\enspace Institut Teknologi Bandung
+\end{center}
+\vspace{0.3cm}
+
+\section{Dasar Teori}
+\input{bab/nb/teori}
+\section{Implementasi}
+\input{bab/nb/implementasi}
+\section{Hasil dan Analisis}
+\input{bab/nb/hasil}
+\section{Kesimpulan}
+\input{bab/nb/kesimpulan}
+
+\begingroup
+\let\chapter\section
+\small
+\begin{thebibliography}{99}
+\bibitem{ref:bayesnet} N. U. Maulidevi, “Bayes Net,” IF3170 Inteligensi Artifisial, Edunex ITB, 2024.
+\input{bab/nb/referensi}
+\end{thebibliography}
+\endgroup
