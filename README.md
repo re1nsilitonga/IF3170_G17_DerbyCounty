@@ -49,5 +49,3 @@ jupyter nbconvert --to notebook --execute --inplace src/main.ipynb
 ```
 
 Notebook bisa dijalankan dari folder mana pun karena root repo dicari otomatis.
-
-old 0,43 dipakai untuk melaporkan skor pada protokol tim, sedangkan threshold 0,45 dipakai untuk ekspor CSV.
